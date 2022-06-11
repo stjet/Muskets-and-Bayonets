@@ -1,0 +1,15 @@
+html, body {
+  height: calc(100vh-5px);
+  width: calc(100vw-5px);
+  margin: 0;
+  padding: 5px;
+}
+
+@font-face {
+  font-family: canterbury;
+  src: url(fonts/canterbury/Canterbury.ttf);
+}
+
+#game-canvas {
+  border: 1px solid black;
+}
