@@ -1,3 +1,5 @@
+// disabled, use for debug: @ts-check
+
 window.gameScaleFactor = 1;
 window.gameTranslate = [0, 0];
 window.helpIndex = 0;
@@ -420,6 +422,10 @@ let regions_info = {
 };
 
 //development util function
+/**
+ * @param {number[]} jumble
+ * @return {string}
+ */
 function jumble_to_points(jumble) {
   //[1,2,3,4] to [[1,2],[3,4]]
   let points = [];
@@ -431,6 +437,10 @@ function jumble_to_points(jumble) {
 
 //classes
 class Canvas {
+  /**
+   * @param {number[]} size
+   * @param {string} id
+   */
   constructor(size, id) {
     this.size = size;
     this.canvas = document.createElement("CANVAS");
@@ -471,6 +481,12 @@ class Canvas {
     this.event_functions = {};
     this.events = {};
   }
+  //new (name: string) => any means any class (eg TextButton)
+  /**
+   * @param {string} event
+   * @param {new (name: string) => any} objects
+   * @param {boolean} [overwrite=true]
+   */
   addEvent(event, objects, overwrite=true) {
     //prevent overwriting
     if (this.events[event] && !overwrite) {
@@ -612,6 +628,12 @@ class TextButton {
 }
 
 class StaticBackground {
+  /**
+   * @param {Canvas} canvas
+   * @param {image_url} string
+   * @param {string} color
+   * @param {Image} image
+   */
   constructor(canvas, image_url, color, image) {
     this.canvas = canvas;
     this.image_url = image_url;
@@ -639,10 +661,15 @@ class StaticBackground {
 }
 
 class MovingBackground {
+  /**
+   * @param {Canvas} canvas
+   * @param {image_url} string
+   * @param {Image} image
+   */
   constructor(canvas, image_url, image) {
     this.canvas = canvas;
     this.image_url = image_url;
-    this.image;
+    this.image = image;
     this.canvas.components.push(this);
   }
   update() {
@@ -662,6 +689,10 @@ class RegionWindow {
   //units, buildings
 }
 
+/**
+ * @param {number[][]} coords
+ * @param {number} scale
+ */
 function scaleCoords(coords, scale) {
   //this scales relative to [0,0]. Maybe do it relative to the center of canvas? Dunno
   //coords: [[x, y], [x, y]]
@@ -672,6 +703,10 @@ function scaleCoords(coords, scale) {
   return new_coords;
 }
 
+/**
+ * @param {number[][]} coords
+ * @param {number} translate
+ */
 function translateCoords(coords, translate) {
   //coords: [[x, y], [x, y]]
   let new_coords = [];
@@ -691,6 +726,13 @@ class UnitFigure {
 }
 
 class Region {
+  /**
+   * @param {Canvas} canvas
+   * @param {number[][]} coords
+   * @param {string} color
+   * @param {string} desig
+   * @param {number[][][]} extensions
+   */
   constructor(canvas, coords, color, desig, extensions) {
     this.canvas = canvas;
     //original coords
@@ -750,6 +792,15 @@ class Region {
 }
 
 class Text {
+  /**
+   * @param {Canvas} canvas
+   * @param {number[]} coords
+   * @param {string} text
+   * @param {string} text_info
+   * @param {string} color
+   * @param {number} maxwidth
+   * @param {string} identity
+   */
   constructor(canvas, coords, text, text_info, color, maxwidth, identity) {
     this.canvas = canvas;
     this.coords = coords;
@@ -784,6 +835,16 @@ class Text {
 
 //makes more sense for Link to extend TextButton not Text
 class Link extends TextButton {
+  /**
+   * @param {Canvas} canvas
+   * @param {string} link
+   * @param {number[]} coords
+   * @param {string} text
+   * @param {string} text_info
+   * @param {string} text_color
+   * @param {string} feedback_text_color
+   * @param {boolean} underline
+   */
   constructor(canvas, link, coords, text, text_info, text_color, feedback_text_color, underline) {
     //measure text width, get bounding box
     canvas.context.font = text_info;
@@ -805,6 +866,69 @@ class Link extends TextButton {
 
 //displays: 1/4, 2/4, etc etc
 class Counter extends Text {
+  //
+}
+
+//does not include label
+class TextInput {
+  /**
+   * @param {Canvas} canvas
+   * @param {[number[], number[][]]} coords
+   * @param {string} placeholder
+   * @param {string} text_info
+   * @param {string} inactive_color
+   * @param {string} active_color
+   * @param {string} background_color
+   * @param {string} border
+   * @param {boolean} dotted_border
+   * @param {number} max_length
+   */
+  constructor(canvas, coords, placeholder, text_info, inactive_color, active_color, background_color, border, dotted_border, max_length) {
+    this.canvas = canvas;
+    //coords: [text location: [x, y], [bounding box [x, y], [x, y]]]
+    this.coords = coords;
+    this.placeholder = placeholder;
+    this.current_text = this.placeholder;
+    this.text_info = text_info;
+    this.inactive_color = inactive_color;
+    this.active_color = active_color;
+    this.background_color = background_color;
+    this.border = border;
+    this.dotted_border = dotted_border;
+    this.max_length = max_length;
+    this.active = false;
+    //onclick modify contents
+    //detect key inputs while active
+  }
+  update() {
+    if (this.background_color) {
+      this.canvas.context.fillStyle = this.background_color;
+      let width = this.coords[1][1][0]-this.coords[1][0][0];
+      let height = this.coords[1][0][1]-this.coords[1][1][1];
+      this.canvas.context.fillRect(this.coords[1][0][0], this.coords[1][0][1], width, height);
+      if (this.border) {
+        if (this.active) {
+          this.canvas.context.strokeStyle = this.active_color;
+        } else {
+          this.canvas.context.strokeStyle = this.inactive_color;
+        }
+        if (this.dotted_border) {
+          this.canvas.context.setLineDash([10, 10]);
+        }
+        this.canvas.context.strokeRect(this.coords[1][0][0], this.coords[1][0][1], width, height);
+      }
+    }
+    let maxWidth = coords[1][1][0] - coords[1][0][0];
+    if (this.active) {
+      this.canvas.context.fillStyle = this.active_color;
+    } else {
+      this.canvas.context.fillStyle = this.inactive_color;
+    }
+    this.canvas.context.fillText(this.current_text, this.coords[0], this.coords[1], maxWidth);
+  }
+}
+
+class DropDownInput {
   //
 }
 
@@ -834,7 +958,7 @@ function game_scene() {
   } else if (Number(window.starting_region) <= 77) {
     window.gameTranslate = [600, 800];
   } else if (Number(window.starting_region) <= 97) {
-    window.gameTranslate = [600, 800];
+    window.gameTranslate = [600, 1350];
   } else {
     //essentially the same as doing `if (Number(window.starting_region) <= 116)`
     window.gameTranslate = [0, 1000];
@@ -897,11 +1021,14 @@ function game_scene() {
   }
 }
 
+/**
+ * @param {string} starting_region
+ */
 function selection_part_2_scene(starting_region) {
   window.starting_region = starting_region;
   canvas.reset();
   //chosen_region is a desig
-  //create nation! names, traits flags??? stuff like that.
+  //create nation! names, nation color, traits, flags??? stuff like that.
   //for now not made so
   game_scene();
 }
