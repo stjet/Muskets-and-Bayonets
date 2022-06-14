@@ -487,6 +487,14 @@ let regions_info = {
   }
 };
 
+//player's nation
+let self_nation = {
+  name: "",
+  slogan: "",
+  color: "",
+  owned_regions: [] 
+};
+
 //development util function
 /**
  * @param {number[]} jumble
@@ -1056,11 +1064,6 @@ class TextInput {
   }
 }
 
-//list of choices given, use arrow keys left and right to choose
-class LimitedInput {
-  //
-}
-
 let canvas = new Canvas([1200,700], "game-canvas");
 //12 fps
 //increase fps?
@@ -1151,6 +1154,18 @@ function game_scene() {
 }
 
 /**
+ * @param {TextInput} name_input
+ * @param {TextInput} slogan_input
+ * @param {Text} color_input
+ */
+function set_nation(name_input, slogan_input, color_input) {
+  //notes nation creation stuff
+  self_nation.name = name_input.current_text;
+  self_nation.slogan = slogan_input.current_text;
+  self_nation.color = color_input.text;
+}
+
+/**
  * @param {string} starting_region
  */
 function selection_part_2_scene(starting_region) {
@@ -1161,13 +1176,37 @@ function selection_part_2_scene(starting_region) {
   //for now not made so
   let center = [canvas.canvas.width, canvas.canvas.height];
   //nation name
-  new TextInput(canvas, [[center[0]/2-80, 120], [[center[0]/2-90, 90], [center[0]/2+90, 130]]], "Nation Name", "28px Arial", "gray", "black", "white", true, true, 16, undefined);
+  let name_input = new TextInput(canvas, [[center[0]/2-80, 120], [[center[0]/2-90, 90], [center[0]/2+90, 130]]], "Nation Name", "28px Arial", "gray", "black", "white", true, true, 16, undefined);
   //slogan/motto
-  new TextInput(canvas, [[center[0]/2-215, 160], [[center[0]/2-220, 145], [center[0]/2+220, 165]]], "This is our Slogan and we're Proud of it", "15px Arial", "gray", "black", "white", true, true, 64, ['"', '"'])
-  //color
+  let slogan_input = new TextInput(canvas, [[center[0]/2-215, 160], [[center[0]/2-220, 145], [center[0]/2+220, 165]]], "This is our Slogan and we're Proud of it", "15px Arial", "gray", "black", "white", true, true, 64, ['"', '"'])
+  //color (use same as help scene)
+  const colors = ["Red", "Maroon", "Green", "Lime", "Purple", "Orange", "Teal", "Slategray"];
+  let color_index = 0;
+  let color_input = new Text(canvas, [center[0]/2-40, 200], colors[color_index], "22px Arial", colors[color_index], undefined, "color-picker");
+  new TextButton(canvas, [[center[0]/2-250, 200], [[center[0]/2-255, 165], [center[0]/2-240, 200]]], "‹", "35px Arial", false, "black", "#041616", false, false, false, function() {
+    color_index--;
+    //loop back
+    if (color_index < 0) {
+      color_index = colors.length-1;
+    }
+    color_input.color = colors[color_index];
+    canvas.canvas.dispatchEvent(new CustomEvent("customtextchange", {detail: {"color-picker": colors[color_index]}}));
+  });
+  //technically not accurate because text starts at lower left corner. but should be off by a little only
+  new TextButton(canvas, [[center[0]/2+250, 200], [[center[0]/2+245, 165], [center[0]/2+260, 200]]], "›", "35px Arial", false, "black", "#3f3f3d", false, false, false, function() {
+    color_index++;
+    if (color_index >= colors.length) {
+      color_index = 0;
+    }
+    color_input.color = colors[color_index];
+    canvas.canvas.dispatchEvent(new CustomEvent("customtextchange", {detail: {"color-picker": colors[color_index]}}));
+  });
   //traits
   //to game button
-  new TextButton(canvas, [[center[0]/2-43, 475], [[center[0]/2-60, 440], [center[0]/2+60, 490]]], "Create", "28px Arial", "red", "#e5d5e3", "white", true, "black", false, game_scene);
+  new TextButton(canvas, [[center[0]/2-43, 475], [[center[0]/2-60, 440], [center[0]/2+60, 490]]], "Create", "28px Arial", "red", "#e5d5e3", "white", true, "black", false, function() {
+    set_nation(name_input, slogan_input, color_input);
+    game_scene();
+  });
 }
 
 function selection_part_1_scene() {
