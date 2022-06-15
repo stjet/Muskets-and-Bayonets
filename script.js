@@ -556,6 +556,13 @@ class Canvas {
     this.event_functions = {};
     this.events = {};
   }
+  /**
+   * @param {[new (name: string) => any]} object
+   * @param {number} new_index
+   */
+  changeOrder(object, new_index) {
+    this.components.splice(new_index, 0, object);
+  }
   //new (name: string) => any means any class (eg TextButton)
   /**
    * @param {string} event
@@ -1078,6 +1085,12 @@ let affinity_start_background = new Image();
 affinity_start_background.src = "/images/modified_affinity_screen.png";
 let transparent_selection_map = new Image();
 transparent_selection_map.src = "/images/transparent_selection_map.png";
+let game_overlay = new Image();
+game_overlay.src = "/images/nnom_overlay.png";
+
+function tick() {
+  //1 second = 1 day
+}
 
 function game_scene() {
   window.gameScaleFactor = 1.5;
@@ -1120,26 +1133,48 @@ function game_scene() {
     }
   }
   self.keydown_temp_disabled = false;
+  //keeps track of the pressed keys
+  window.gamePressedKeys = [];
   document.addEventListener("keydown", function(e) {
     if (self.keydown_temp_disabled) {
       return;
     }
-    //if up, down, left, right
-    switch (e.key) {
-      case "ArrowUp":
-        window.gameTranslate[1] -= 3;
-        break;
-      case "ArrowDown":
-        window.gameTranslate[1] += 3;
-        break;
-      case "ArrowLeft":
-        window.gameTranslate[0] -= 3;
-        break;
-      case "ArrowRight":
-        window.gameTranslate[0] += 3;
-        break;
-      default: break;
+    if (!window.gamePressedKeys.includes(e.key)) {
+      window.gamePressedKeys.push(e.key);
     }
+    //if up, down, left, right
+    function movement_handling(key) {
+      switch (key) {
+        case "ArrowUp":
+          window.gameTranslate[1] -= 3;
+          break;
+        case "ArrowDown":
+          window.gameTranslate[1] += 3;
+          break;
+        case "ArrowLeft":
+          window.gameTranslate[0] -= 3;
+          break;
+        case "ArrowRight":
+          window.gameTranslate[0] += 3;
+          break;
+        default: break;
+      }
+    }
+    movement_handling(e.key);
+    console.log(window.gamePressedKeys)
+    let directional_keys = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"];
+    for (let i=0; i < directional_keys.length; i++) {
+      if (directional_keys[i] !== e.key && window.gamePressedKeys.includes(directional_keys[i])) {
+        console.log(directional_keys[i])
+        movement_handling(directional_keys[i]);
+      }
+    }
+  });
+  document.addEventListener("keyup", function(e) {
+    let unpressed_key = e.key;
+    window.gamePressedKeys = window.gamePressedKeys.filter(function(value) {
+      return value !== unpressed_key;
+    })
   });
   //set up game scene
   let nnommap = new MovingBackground(canvas, "/images/nnommap_big.png", background_map);
@@ -1148,9 +1183,12 @@ function game_scene() {
   for (let i=0; i < regions_keys.length; i++) {
     //regions_info
     let region_info = regions_info[regions_keys[i]];
-    new Region(canvas, region_info.coords, "red", regions_keys[i], region_info.extensions);
+    regions_info[regions_keys[i]].region_obj = new Region(canvas, region_info.coords, "red", regions_keys[i], region_info.extensions);
     //set onclick and possibly hover effects
   }
+  regions_info[window.starting_region].region_obj.color = self_nation.color;
+  new StaticBackground(canvas, "/images/nnom_overlay.png", false, game_overlay)
+  //1 second = 1 day as standard, but it should be able to be arbitrarily changed (fast forward)
 }
 
 /**
