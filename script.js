@@ -5,6 +5,9 @@ window.gameTranslate = [0, 0];
 window.helpIndex = 0;
 //set after region selection
 window.starting_region = undefined;
+//time tracking
+window.ticks = 0;
+window.tick_interval_id = undefined;
 
 let regions_info = {
   "1": {
@@ -495,7 +498,7 @@ let self_nation = {
   owned_regions: [] 
 };
 
-//development util function
+//development util functions
 /**
  * @param {number[]} jumble
  * @return {string}
@@ -509,13 +512,38 @@ function jumble_to_points(jumble) {
   return JSON.stringify(points);
 }
 
+class Point {
+  /**
+   * @param {Canvas} canvas
+   * @return {number[]} coords
+   * @return {number} radius
+   * @return {string} color
+   */
+  constructor(canvas, coords, radius, color) {
+    this.canvas = canvas;
+    this.coords = coords;
+    this.radius = radius;
+    this.color = color;
+    this.display = true;
+    this.canvas.components.push(this);
+  }
+  update() {
+    if (this.display) {
+      let path = new Path2D();
+      path.arc(this.coords[0], this.coords[1], this.radius, 0, 2*Math.PI);
+      this.canvas.context.fillStyle = this.color;
+      this.canvas.context.fill(path);
+    }
+  }
+}
+
 //classes
 class Canvas {
   /**
    * @param {number[]} size
    * @param {string} id
    */
-  constructor(size, id) {
+  constructor(size, id, contextOptions=undefined) {
     this.size = size;
     this.canvas = document.createElement("CANVAS");
     this.canvas.id = id;
@@ -523,7 +551,7 @@ class Canvas {
     this.canvas.height = size[1];
     this.canvas.tabIndex = 1;
     document.body.appendChild(this.canvas);
-    this.context = this.canvas.getContext('2d');
+    this.context = this.canvas.getContext('2d', contextOptions);
     this.components = [];
     this.events = {};
     //this.event_functions is not meant to be read. internal use only
@@ -893,13 +921,22 @@ class Text {
     this.identity = identity;
     if (this.identity) {
       this.canvas.addEvent("customtextchange", [this], false);
+      this.canvas.addEvent("customcoordschange", [this], false);
     }
     //this.display should be set from outside
     this.display = true;
     this.canvas.components.push(this);
   }
   customtextchange(text_obj) {
-    this.text = text_obj.detail[this.identity];
+    if (text_obj.detail[this.identity]) {
+      this.text = text_obj.detail[this.identity];
+    }
+  }
+  customcoordschange(coords_obj) {
+    //if text changes, coords may need to change too
+    if (coords_obj.detail[this.identity]) {
+      this.coords = coords_obj.detail[this.identity];
+    }
   }
   update() {
     if (!this.display) {
@@ -1004,7 +1041,6 @@ class TextInput {
       if (self.active) {
         //ignore key press is over max length
         if (e.key === "Backspace" || e.key === "Delete") {
-          console.log('a')
           self.current_text = self.current_text.substring(0, self.current_text.length-1);
         } else {
           if (self.current_text.length >= self.max_length && self.max_length) {
@@ -1090,23 +1126,51 @@ game_overlay.src = "/images/nnom_overlay.png";
 
 function tick() {
   //1 second = 1 day
+  //update time
+  //apparently js ints are accurate up to 15 digits, so with 1 tick a second, should not overflow or be inaccurate
+  window.ticks++;
+  let years = Math.floor(window.ticks/360);
+  let seasons = Math.floor((window.ticks - years*360) / 90);
+  let days = ((window.ticks - years*360) - seasons*90);
+  let season_names = ["Planting", "Sun", "Harvest", "Rain"];
+  let tick_date_change = new CustomEvent("customtextchange", {detail: {
+    "clock-year": "Year "+String(years),
+    "clock-season": season_names[seasons],
+    "clock-day": "Day "+String(days)
+  }});
+  canvas.canvas.dispatchEvent(tick_date_change);
+  //only emit coords change when new season
+  if (days === 0) {
+    canvas.context.font = "16px Arial";
+    let season_text_width = canvas.context.measureText(season_names[seasons]).width;
+    let tick_season_coords_change = new CustomEvent("customcoordschange", {detail: {
+      "clock-season": [Math.floor(canvas.canvas.width/2-season_text_width/2+15), 560]
+    }});
+    canvas.canvas.dispatchEvent(tick_season_coords_change);
+  }
 }
 
 function game_scene() {
   window.gameScaleFactor = 1.5;
   window.gameTranslate = [0, 0];
   //let starting_region_coords = regions_info[window.starting_region].coords[0];
-  if (Number(window.starting_region) <= 20) {
+  if (Number(window.starting_region) == 11) {
+    //11 is special case because kinda far
+    window.gameTranslate = [75, 300];
+  } else if (Number(window.starting_region) <= 20) {
     window.gameTranslate = [0, 0];
-  } else if (Number(window.starting_region) <= 43) {
+  } else if (Number(window.starting_region) <= 29) {
     window.gameTranslate = [600, 0];
-  } else if (Number(window.starting_region) <= 77) {
-    window.gameTranslate = [600, 800];
+  } else if (Number(window.starting_region) <= 42) {
+    window.gameTranslate = [600, 300];
+  } else if (Number(window.starting_region) <= 67) {
+    window.gameTranslate = [600, 850];
   } else if (Number(window.starting_region) <= 97) {
-    window.gameTranslate = [600, 1350];
-  } else {
-    //essentially the same as doing `if (Number(window.starting_region) <= 116)`
+    window.gameTranslate  = [600, 1550];
+  } else if (Number(window.starting_region) <= 115) {
     window.gameTranslate = [0, 1000];
+  } else if (Number(window.starting_region) == 116) {
+    window.gameTranslate = [0, 1250];
   }
   canvas.reset();
   //enable scrolling
@@ -1161,11 +1225,9 @@ function game_scene() {
       }
     }
     movement_handling(e.key);
-    console.log(window.gamePressedKeys)
     let directional_keys = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"];
     for (let i=0; i < directional_keys.length; i++) {
       if (directional_keys[i] !== e.key && window.gamePressedKeys.includes(directional_keys[i])) {
-        console.log(directional_keys[i])
         movement_handling(directional_keys[i]);
       }
     }
@@ -1174,7 +1236,7 @@ function game_scene() {
     let unpressed_key = e.key;
     window.gamePressedKeys = window.gamePressedKeys.filter(function(value) {
       return value !== unpressed_key;
-    })
+    });
   });
   //set up game scene
   let nnommap = new MovingBackground(canvas, "/images/nnommap_big.png", background_map);
@@ -1183,12 +1245,22 @@ function game_scene() {
   for (let i=0; i < regions_keys.length; i++) {
     //regions_info
     let region_info = regions_info[regions_keys[i]];
-    regions_info[regions_keys[i]].region_obj = new Region(canvas, region_info.coords, "red", regions_keys[i], region_info.extensions);
+    regions_info[regions_keys[i]].region_obj = new Region(canvas, region_info.coords, "white", regions_keys[i], region_info.extensions);
     //set onclick and possibly hover effects
   }
   regions_info[window.starting_region].region_obj.color = self_nation.color;
+  //crown is around 15 pixels off center
   new StaticBackground(canvas, "/images/nnom_overlay.png", false, game_overlay)
+  //nation name box: upper left [555, 650]
   //1 second = 1 day as standard, but it should be able to be arbitrarily changed (fast forward)
+  new Text(canvas, [590, 540], "Year 0", "14px Arial", "black", false, "clock-year");
+  //center season text
+  canvas.context.font = "16px Arial";
+  let season_text_width = canvas.context.measureText("Planting").width;
+  new Text(canvas, [canvas.canvas.width/2-season_text_width/2+15, 560], "Planting", "16px Arial", "black", false, "clock-season");
+  new Text(canvas, [canvas.canvas.width/2-27+15, 575], "Season", "16px Arial", "black", false, undefined);
+  new Text(canvas, [590, 595], "Day 0", "14px Arial", "black", false, "clock-day");
+  window.tick_interval_id = setInterval(tick, 1000);
 }
 
 /**
@@ -1211,7 +1283,6 @@ function selection_part_2_scene(starting_region) {
   canvas.reset();
   //chosen_region is a desig
   //create nation! names, nation color, traits, flags??? stuff like that.
-  //for now not made so
   let center = [canvas.canvas.width, canvas.canvas.height];
   //nation name
   let name_input = new TextInput(canvas, [[center[0]/2-80, 120], [[center[0]/2-90, 90], [center[0]/2+90, 130]]], "Nation Name", "28px Arial", "gray", "black", "white", true, true, 16, undefined);
@@ -1241,7 +1312,27 @@ function selection_part_2_scene(starting_region) {
   });
   //traits
   //to game button
-  new TextButton(canvas, [[center[0]/2-43, 475], [[center[0]/2-60, 440], [center[0]/2+60, 490]]], "Create", "28px Arial", "red", "#e5d5e3", "white", true, "black", false, function() {
+  let game_btn = new TextButton(canvas, [[center[0]/2-43, 475], [[center[0]/2-60, 440], [center[0]/2+60, 490]]], "Create", "28px Arial", "red", "#e5d5e3", "white", true, "black", false, function() {
+    if (name_input.current_text === name_input.placeholder || name_input.current_text === "") {
+      let old_active = name_input.active_color;
+      let old_inactive = name_input.inactive_color;
+      //the flashing
+      name_input.active_color = "#fc0a26";
+      name_input.inactive_color = "#fc0a26";
+      setTimeout(function() {
+        name_input.active_color = old_active;
+        name_input.inactive_color = old_inactive;
+      }, 200);
+      setTimeout(function() {
+        name_input.active_color = "#fc0a26";
+        name_input.inactive_color = "#fc0a26";
+      }, 400);
+      setTimeout(function() {
+        name_input.active_color = old_active;
+        name_input.inactive_color = old_inactive;
+      }, 600);
+      return;
+    }
     set_nation(name_input, slogan_input, color_input);
     game_scene();
   });
@@ -1313,12 +1404,15 @@ function start_scene() {
   //title
   //42px width: 356
   //65px width: close to 551
-  new Text(canvas, [canvas.canvas.width/2-(551/2), 300], "Muskets and Bayonets", "65px Canterbury", "black", undefined, undefined)
+  new Text(canvas, [canvas.canvas.width/2-(551/2), 300], "Muskets and Bayonets", "65px Canterbury", "black", undefined, undefined);
 }
 
-//outside of help_scene for debug purposes
-const help_info = [{"title": "Welcome!", "content": "Muskets and Bayonets is a real time grand strategy game set in the early gunpowder era."}, {"title": "Map Controls", "content": "Arrow keys (left, right, up, down) moves the map. Scroll wheel zooms the map in and out."}];
 function help_scene() {
+  const help_info = [
+    {"title": "Welcome!", "content": "Muskets and Bayonets is a real time grand strategy game set in the early gunpowder era."},
+    {"title": "Nation Selection", "content": "Click 'Play', and click a region to start in. Then, enter in name, slogan, and color."},
+    {"title": "Map Controls", "content": "Arrow keys (left, right, up, down) moves the map. Scroll wheel zooms the map in and out."}
+  ];
   canvas.reset();
   //back button
   new TextButton(canvas, [[15, 25], [[10, 10], [55, 38]]], "Back", "18px Arial", false, "black", "#041616", false, false, true, start_scene);
