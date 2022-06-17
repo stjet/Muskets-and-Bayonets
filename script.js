@@ -901,6 +901,27 @@ class Region {
   }
 }
 
+//transparent part of an overlay. anything in path should be interactable, anything outside is part of the overlay.
+//if region is under overlay (not in transparent path), it should not be interactable
+class OverlayTransparentPath {
+  /**
+   * @param {number[][]} coords 
+   */
+  constructor(coords) {
+    this.coords = coords;
+    let path = new Path2D();
+    path.moveTo(...this.coords[0]);
+    for (let i=1; i < this.coords.length; i++) {
+      path.lineTo(...this.coords[i]);
+    }
+    path.lineTo(...this.coords[0]);
+    this.path = path;
+  }
+  get_path() {
+    return this.path;
+  }
+}
+
 class Text {
   /**
    * @param {Canvas} canvas
@@ -1150,6 +1171,27 @@ function tick() {
   }
 }
 
+function game_help_button() {
+  window.open("/?go_to=help", '_blank');
+}
+
+function game_pause_button() {
+  clearInterval(window.tick_interval_id);
+  window.tick_interval_id = undefined;
+}
+
+function fast_forward_button() {
+  clearInterval(window.tick_interval_id);
+  window.tick_interval_id = setInterval(tick, 167);
+}
+
+function normal_speed_button() {
+  clearInterval(window.tick_interval_id);
+  window.tick_interval_id = setInterval(tick, 667);
+}
+
+//overlay path for game scene
+let overlay_transparent = new OverlayTransparentPath([[24,541],[21,22],[1174,24],[1175,541],[870,542],[869,562],[806,563],[807,531],[664,527],[642,504],[657,473],[640,482],[642,456],[621,441],[615,430],[605,433],[606,442],[582,449],[578,469],[583,479],[569,473],[586,505],[554,531],[550,563],[355,563],[355,545]]);
 function game_scene() {
   window.gameScaleFactor = 1.5;
   window.gameTranslate = [0, 0];
@@ -1251,7 +1293,8 @@ function game_scene() {
   regions_info[window.starting_region].region_obj.color = self_nation.color;
   //crown is around 15 pixels off center
   new StaticBackground(canvas, "/images/nnom_overlay.png", false, game_overlay)
-  //nation name box: upper left [555, 650]
+  //nation name box: lower left [555, 680]
+  new Text(canvas, [555, 675], self_nation.name, "18px Arial", "black", 120, undefined);
   //1 second = 1 day as standard, but it should be able to be arbitrarily changed (fast forward)
   new Text(canvas, [590, 540], "Year 0", "14px Arial", "black", false, "clock-year");
   //center season text
@@ -1260,7 +1303,17 @@ function game_scene() {
   new Text(canvas, [canvas.canvas.width/2-season_text_width/2+15, 560], "Planting", "16px Arial", "black", false, "clock-season");
   new Text(canvas, [canvas.canvas.width/2-27+15, 575], "Season", "16px Arial", "black", false, undefined);
   new Text(canvas, [590, 595], "Day 0", "14px Arial", "black", false, "clock-day");
-  window.tick_interval_id = setInterval(tick, 1000);
+  window.tick_interval_id = setInterval(tick, 667);
+  //help ("?") button
+  new TextButton(canvas, [[0, 0], [[770, 535], [800, 560]]], false, false, "rgba(255, 255, 255, 0)", undefined, undefined, false, false, false, game_help_button);
+  //timechanging buttons (pause, play, fast forward)
+  //ff
+  new TextButton(canvas, [[0, 0], [[725, 535], [760, 560]]], false, false, "rgba(255, 255, 255, 0)", undefined, undefined, false, false, false, fast_forward_button);
+  //play
+  new TextButton(canvas, [[0, 0], [[700, 535], [722, 560]]], false, false, "rgba(255, 255, 255, 0)", undefined, undefined, false, false, false, normal_speed_button);
+  //pause
+  new TextButton(canvas, [[0, 0], [[675, 535], [697, 560]]], false, false, "rgba(255, 255, 255, 0)", undefined, undefined, false, false, false, game_pause_button);
+  //
 }
 
 /**
@@ -1449,3 +1502,9 @@ function credit_scene() {
 }
 
 start_scene();
+
+
+let query_params = new URLSearchParams(window.location.search || location.search);
+if (query_params.get("go_to") === "help") {
+  help_scene();
+}
