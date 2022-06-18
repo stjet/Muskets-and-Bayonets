@@ -929,16 +929,18 @@ class Text {
    * @param {string} text
    * @param {string} text_info
    * @param {string} color
+   * @param {string} stroke_color
    * @param {number} maxwidth
    * @param {string} identity
    */
-  constructor(canvas, coords, text, text_info, color, maxwidth, identity) {
+  constructor(canvas, coords, text, text_info, color, stroke_color, maxwidth, identity) {
     this.canvas = canvas;
     this.coords = coords;
     this.text = text;
     this.text_info = text_info;
+    this.stroke_color = stroke_color;
     this.color = color;
-    this.maxwidth = maxwidth;
+    this.maxWidth = maxwidth;
     this.identity = identity;
     if (this.identity) {
       this.canvas.addEvent("customtextchange", [this], false);
@@ -946,6 +948,8 @@ class Text {
     }
     //this.display should be set from outside
     this.display = true;
+    this.shadowBlur = 5;
+    this.lineWidth = 10;
     this.canvas.components.push(this);
   }
   customtextchange(text_obj) {
@@ -963,12 +967,32 @@ class Text {
     if (!this.display) {
       return;
     }
-    this.canvas.context.fillStyle = this.color;
     this.canvas.context.font = this.text_info;
-    if (this.maxwidth) {
-      this.canvas.context.fillText(this.text, this.coords[0], this.coords[1], this.maxwidth);
-    } else {
-      this.canvas.context.fillText(this.text, this.coords[0], this.coords[1]);
+    //eg: shadow-white
+    if (this.stroke_color) {
+      if (this.stroke_color.startsWith('shadow-')) {
+        this.canvas.context.shadowColor = this.stroke_color.split("-")[1];
+        this.canvas.context.shadowBlur = this.shadowBlur;
+        this.canvas.context.lineWidth = this.lineWidth;
+      } else {
+        this.canvas.context.strokeStyle = this.stroke_color;
+        this.canvas.context.strokeText(this.text, this.coords[0], this.coords[1], this.maxWidth);
+      }
+    }
+    if (this.color) {
+      this.canvas.context.fillStyle = this.color;
+      if (this.maxWidth) {
+        this.canvas.context.fillText(this.text, this.coords[0], this.coords[1], this.maxWidth);
+      } else {
+        this.canvas.context.fillText(this.text, this.coords[0], this.coords[1]);
+      }
+    }
+    if (this.stroke_color) {
+      if (this.stroke_color.startsWith('shadow-')) {
+        //reset
+        this.canvas.context.shadowBlur = 0;
+        this.canvas.context.lineWidth = 1;
+      }
     }
   }
 }
@@ -1294,15 +1318,15 @@ function game_scene() {
   //crown is around 15 pixels off center
   new StaticBackground(canvas, "/images/nnom_overlay.png", false, game_overlay)
   //nation name box: lower left [555, 680]
-  new Text(canvas, [555, 675], self_nation.name, "18px Arial", "black", 120, undefined);
+  new Text(canvas, [555, 675], self_nation.name, "18px Arial", "black", false, 120, undefined);
   //1 second = 1 day as standard, but it should be able to be arbitrarily changed (fast forward)
-  new Text(canvas, [590, 540], "Year 0", "14px Arial", "black", false, "clock-year");
+  new Text(canvas, [590, 540], "Year 0", "14px Arial", "black", "shadow-white", false, false, "clock-year");
   //center season text
   canvas.context.font = "16px Arial";
   let season_text_width = canvas.context.measureText("Planting").width;
-  new Text(canvas, [canvas.canvas.width/2-season_text_width/2+15, 560], "Planting", "16px Arial", "black", false, "clock-season");
-  new Text(canvas, [canvas.canvas.width/2-27+15, 575], "Season", "16px Arial", "black", false, undefined);
-  new Text(canvas, [590, 595], "Day 0", "14px Arial", "black", false, "clock-day");
+  new Text(canvas, [canvas.canvas.width/2-season_text_width/2+15, 560], "Planting", "16px Arial", "black", "shadow-white", false, "clock-season");
+  new Text(canvas, [canvas.canvas.width/2-27+15, 575], "Season", "16px Arial", "black", "shadow-white", false, undefined);
+  new Text(canvas, [590, 595], "Day 0", "14px Arial", "black", "shadow-white", false, "clock-day");
   window.tick_interval_id = setInterval(tick, 667);
   //help ("?") button
   new TextButton(canvas, [[0, 0], [[770, 535], [800, 560]]], false, false, "rgba(255, 255, 255, 0)", undefined, undefined, false, false, false, game_help_button);
@@ -1344,7 +1368,7 @@ function selection_part_2_scene(starting_region) {
   //color (use same as help scene)
   const colors = ["Red", "Maroon", "Green", "Lime", "Purple", "Orange", "Teal", "Slategray"];
   let color_index = 0;
-  let color_input = new Text(canvas, [center[0]/2-40, 200], colors[color_index], "22px Arial", colors[color_index], undefined, "color-picker");
+  let color_input = new Text(canvas, [center[0]/2-40, 200], colors[color_index], "22px Arial", colors[color_index], false, undefined, "color-picker");
   new TextButton(canvas, [[center[0]/2-250, 200], [[center[0]/2-255, 165], [center[0]/2-240, 200]]], "‹", "35px Arial", false, "black", "#041616", false, false, false, function() {
     color_index--;
     //loop back
@@ -1399,7 +1423,7 @@ function selection_part_1_scene() {
   selectmap.crop = true;
   //select province
   //instructions
-  new Text(canvas, [canvas.canvas.width/2-150, 100], "Select starting region", "24px Arial", "black")
+  new Text(canvas, [canvas.canvas.width/2-150, 100], "Select starting region", "24px Arial", "black", false, false, undefined);
   //zoomed out map
   let regions_keys = Object.keys(regions_info);
   for (let i=0; i < regions_keys.length; i++) {
@@ -1457,7 +1481,7 @@ function start_scene() {
   //title
   //42px width: 356
   //65px width: close to 551
-  new Text(canvas, [canvas.canvas.width/2-(551/2), 300], "Muskets and Bayonets", "65px Canterbury", "black", undefined, undefined);
+  new Text(canvas, [canvas.canvas.width/2-(551/2), 300], "Muskets and Bayonets", "65px Canterbury", "black", false, false, undefined);
 }
 
 function help_scene() {
@@ -1487,8 +1511,8 @@ function help_scene() {
     canvas.canvas.dispatchEvent(new CustomEvent("customtextchange", {detail: help_info[window.helpIndex]}));
   });
   //help text
-  new Text(canvas, [canvas.canvas.width/2-150, 250], help_info[window.helpIndex].title, "50px Arial", "black", 690, "title");
-  new Text(canvas, [canvas.canvas.width/2-305, 350], help_info[window.helpIndex].content, "21px Arial", "black", 690, "content");
+  new Text(canvas, [canvas.canvas.width/2-150, 250], help_info[window.helpIndex].title, "50px Arial", "black", false, 690, "title");
+  new Text(canvas, [canvas.canvas.width/2-305, 350], help_info[window.helpIndex].content, "21px Arial", "black", false, 690, "content");
 }
 
 function credit_scene() {
@@ -1498,7 +1522,7 @@ function credit_scene() {
   //credits
   new Link(canvas, "https://prussia.dev", [400, 250], "Prussia", "35px Arial", "black", "blue", true);
   new Link(canvas, "https://search.aol.com/aol/search?q=nnomtnert", [canvas.canvas.width-500, 250], "Nnomtnert", "35px Arial", "black", "blue", true);
-  new Text(canvas, [325, 500], "Also thanks to Affinity (start page artist) and the Arvaldians. Fonts used: Canterbury, Arial", "18px Arial", "black", 610)
+  new Text(canvas, [325, 500], "Also thanks to Affinity (start page artist) and the Arvaldians. Fonts used: Canterbury, Arial", "18px Arial", "black", false, 610, undefined);
 }
 
 start_scene();
