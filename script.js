@@ -791,12 +791,51 @@ class MovingBackground {
   }
 }
 
-class NationWindow {
-  //nation overview
-}
-
-class RegionWindow {
-  //units, buildings
+class Modal {
+  constructor(canvas, coords, color, rounded, background_opacity, border) {
+    this.canvas = canvas;
+    //[[x, y], [x, y]]
+    this.coords = coords;
+    this.color = color;
+    this.rounded = rounded;
+    this.background_opacity = background_opacity;
+    this.border = border;
+    //members of the modal
+    this.members = [];
+    this.canvas.components.push(this);
+  }
+  close() {
+    //enable canvas onclick and stuff
+    let self = this;
+    this.canvas.components = this.canvas.components.filter(function (item) {
+      return self !== item && !self.members.includes(item);
+    });
+  }
+  update() {
+    //disable canvas onclick and stuff
+    //greyed out background
+    this.canvas.context.fillStyle = "rgba(255, 255, 255, "+String(this.background_opacity)+")";
+    this.canvas.context.fillRect(0, 0, this.canvas.canvas.width, this.canvas.canvas.height);
+    //actual modal
+    if (this.rounded) {
+      let path = new Path2D();
+      //top left corner (arc measures are radians, clockwise)
+      path.arc(this.coords[0][0]+15, this.coords[0][1]+15, 15, Math.PI, 3/2*Math.PI);
+      //top right
+      path.arc(this.coords[1][0]-15, this.coords[0][1]+15, 15, 3/2*Math.PI, 2*Math.PI);
+      //bottom right
+      path.arc(this.coords[1][0]-15, this.coords[1][1]-15, 15, 0, Math.PI/2);
+      //bottom left
+      path.arc(this.coords[0][0]+15, this.coords[1][1]-15, 15, Math.PI/2, Math.PI);
+      path.lineTo(this.coords[0][0], this.coords[0][1]+15);
+      this.canvas.context.fillStyle = this.color;
+      this.canvas.context.fill(path);
+      if (this.border) {
+        this.canvas.context.strokeStyle = this.border;
+        this.canvas.context.stroke(path);
+      }
+    }
+  }
 }
 
 /**
@@ -854,7 +893,7 @@ class Region {
     this.paths = [];
     //extensions are array of extra coords. Essentially detaches areas that are still part of the region. In our case its islands and stuff
     this.extensions = extensions
-    //in future, need onclick and possible mousemove functions
+    //likely, will set onclick and possible mousemove functions externally
     //above should be set depending on scene
     this.canvas.components.push(this);
     this.canvas.regions.push(this);
@@ -893,12 +932,14 @@ class Region {
       }
     }
   }
+  /*
   click() {
     //
   }
   mousemove() {
     //
   }
+  */
 }
 
 //transparent part of an overlay. anything in path should be interactable, anything outside is part of the overlay.
@@ -1313,6 +1354,22 @@ function game_scene() {
     let region_info = regions_info[regions_keys[i]];
     regions_info[regions_keys[i]].region_obj = new Region(canvas, region_info.coords, "white", regions_keys[i], region_info.extensions);
     //set onclick and possibly hover effects
+    let self = regions_info[regions_keys[i]].region_obj;
+    regions_info[regions_keys[i]].region_obj.onclick = function(e) {
+      if (canvas.context.isPointInPath(overlay_transparent, e.offsetX, e.offsetY)) {
+        //inside the view window, not on the overlay. ok to click
+        let in_region = false;
+        for (let i=0; i < self.paths; i++) {
+          if (canvas.context.isPointInPath(self.paths[i], e.offsetX, e.offsetY)) {
+            in_region = true;
+          }
+        }
+        if (in_region) {
+          //open up region popup
+        }
+      }
+    }
+    canvas.addEvent("click", regions_info[regions_keys[i]].region_obj, false);
   }
   regions_info[window.starting_region].region_obj.color = self_nation.color;
   //crown is around 15 pixels off center
