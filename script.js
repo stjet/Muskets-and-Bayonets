@@ -737,6 +737,24 @@ class TextButton {
   }
 }
 
+class BasicImage {
+  constructor(canvas, coords, size, image_url, image) {
+    this.canvas = canvas;
+    this.coords = coords;
+    this.size = size;
+    this.image_url = image_url;
+    this.image = image;
+    this.canvas.components.push(this);
+  }
+  update() {
+    if (!this.image) {
+      this.image = new Image();
+      this.image.src = this.image_url;
+    }
+    this.canvas.context.drawImage(this.image, this.coords[0], this.coords[1], this.size[0], this.size[1]);
+  }
+}
+
 class StaticBackground {
   /**
    * @param {Canvas} canvas
@@ -1476,8 +1494,13 @@ function selection_part_1_scene() {
   window.gameScaleFactor = 4;
   window.gameTranslate = [-1100, -375];
   canvas.reset();
+  /*
+  //https://stackoverflow.com/questions/35500999/cropping-with-drawimage-not-working-in-safari
   let selectmap = new MovingBackground(canvas, "/images/transparent_selection_map.png", transparent_selection_map);
   selectmap.crop = true;
+  */
+  //see above commented, making it a normal image instead of movingbackground fixes a bug for safari
+  let selectmap = new BasicImage(canvas, [275, 93.75], [600, 600], "/images/transparent_selection_map.png", transparent_selection_map)
   //select province
   //instructions
   new Text(canvas, [canvas.canvas.width/2-150, 100], "Select starting region", "24px Arial", "black", false, false, undefined);
