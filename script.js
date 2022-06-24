@@ -561,6 +561,7 @@ class Canvas {
     this.regions = [];
     this.scroll_temp_disabled = true;
     this.keydown_temp_disabled = true;
+    this.click_temp_disabled = false;
   }
   update() {
     this.frame += 1;
@@ -812,6 +813,9 @@ class MovingBackground {
 class Modal {
   constructor(canvas, coords, color, rounded, background_opacity, border) {
     this.canvas = canvas;
+    this.canvas.scroll_temp_disabled = true;
+    this.canvas.keydown_temp_disabled = true;
+    this.canvas.click_temp_disabled = true;
     //[[x, y], [x, y]]
     this.coords = coords;
     this.color = color;
@@ -821,13 +825,21 @@ class Modal {
     //members of the modal
     this.members = [];
     this.canvas.components.push(this);
+    //https://stackoverflow.com/questions/4011793/this-is-undefined-in-javascript-class-methods
+    this.close = this.close.bind(this);
   }
   close() {
-    //enable canvas onclick and stuff
-    let self = this;
+    console.log(this)
+    //reenable map stuff
+    this.canvas.scroll_temp_disabled = false;
+    this.canvas.keydown_temp_disabled = false;
+    this.canvas.click_temp_disabled = false;
+    //should also enable canvas onclick and stuff
+    //remove self and members
     this.canvas.components = this.canvas.components.filter(function (item) {
-      return self !== item && !self.members.includes(item);
-    });
+      console.log(item, this, item == this, item === this, this.members.includes(item), this.members)
+      return this !== item && !this.members.includes(item);
+    }, this);
   }
   update() {
     //disable canvas onclick and stuff
@@ -1273,6 +1285,14 @@ function normal_speed_button() {
   window.tick_interval_id = setInterval(tick, 667);
 }
 
+function create_region_modal(desig) {
+  //actual modal
+  let region_modal = new Modal(canvas, [[100, 100], [canvas.canvas.width-100, canvas.canvas.height-100]], "white", true, 0.7, "black");
+  //close button
+  let close_button = new TextButton(canvas, [[region_modal.coords[1][0]-47, region_modal.coords[0][1]+47], [[region_modal.coords[1][0]-50, region_modal.coords[0][1]+10], [region_modal.coords[1][0]-10, region_modal.coords[0][1]+50]]], "x", "34px Arial", false, "black", "#041616", false, false, true, region_modal.close);
+  region_modal.members.push(close_button);
+}
+
 //overlay path for game scene
 let overlay_transparent = new OverlayTransparentPath([[24,541],[21,22],[1174,24],[1175,541],[870,542],[869,562],[806,563],[807,531],[664,527],[642,504],[657,473],[640,482],[642,456],[621,441],[615,430],[605,433],[606,442],[582,449],[578,469],[583,479],[569,473],[586,505],[554,531],[550,563],[355,563],[355,545]]);
 function game_scene() {
@@ -1373,17 +1393,21 @@ function game_scene() {
     regions_info[regions_keys[i]].region_obj = new Region(canvas, region_info.coords, "white", regions_keys[i], region_info.extensions);
     //set onclick and possibly hover effects
     let self = regions_info[regions_keys[i]].region_obj;
-    regions_info[regions_keys[i]].region_obj.onclick = function(e) {
-      if (canvas.context.isPointInPath(overlay_transparent, e.offsetX, e.offsetY)) {
+    regions_info[regions_keys[i]].region_obj.click = function(e) {
+      if (self.canvas.click_temp_disabled) {
+        return;
+      }
+      if (canvas.context.isPointInPath(overlay_transparent.get_path(), e.offsetX, e.offsetY)) {
         //inside the view window, not on the overlay. ok to click
         let in_region = false;
-        for (let i=0; i < self.paths; i++) {
+        for (let i=0; i < self.paths.length; i++) {
           if (canvas.context.isPointInPath(self.paths[i], e.offsetX, e.offsetY)) {
             in_region = true;
           }
         }
         if (in_region) {
           //open up region popup
+          create_region_modal(self.desig);
         }
       }
     }
