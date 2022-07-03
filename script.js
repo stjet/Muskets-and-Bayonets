@@ -1,5 +1,8 @@
 // disabled, use for debug: @ts-check
 
+//possible future desktop port: https://developer.mozilla.org/en-US/docs/Games/Publishing_games/Game_distribution#available_tools
+//also add a semblance at mobile support
+
 window.gameScaleFactor = 1;
 window.gameTranslate = [0, 0];
 window.helpIndex = 0;
@@ -8,6 +11,38 @@ window.starting_region = undefined;
 //time tracking
 window.ticks = 0;
 window.tick_interval_id = undefined;
+
+const buildings_info = {
+  "settlement": {
+    //cost is in wealth
+    "co": 3,
+    //maintenance is in supply
+    "mt": 0,
+    //duration of how long it takes to construct (in ticks) [which are days])
+    "dur": 50,
+    //pay period is how long it takes for the resources are produced, and maintenance paid)
+    "per": 15,
+    //production of resources
+    "pr": {
+      //citizens
+      "ci": 1,
+      //wealth
+      "we": 1,
+      //supply
+      "su": 0
+    },
+    //enables production of the units
+    "en": {
+    },
+    "img": "/images/buildings/settlement.png"
+  }
+};
+
+const unit_stats = {
+  //
+};
+
+//1 region makes 1 wealth per 30 days?
 
 let regions_info = {
   "1": {
@@ -536,6 +571,21 @@ class Point {
     }
   }
 }
+
+//non dev util functions
+function is_mobile() {
+  if (navigator.userAgent) {
+    let mobile_uas = ["iPhone", "iPad", "iPod", "Mobile Safari", "Android", "Blackberry", "Opera Mini", "IEMobile", "Blackberry", "SamsungBrowser"];
+    for (let i=0; i < mobile_uas.length; i++) {
+      if (navigator.userAgent.includes(mobile_uas[i])) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+window.game_is_mobile_device = is_mobile();
 
 //classes
 class Canvas {
@@ -1140,6 +1190,28 @@ class TextInput {
     this.click = function(e) {
       //check if within coords
       if ((e.offsetX > self.coords[1][0][0] && e.offsetX < self.coords[1][1][0]) && (e.offsetY > self.coords[1][0][1] && e.offsetY < self.coords[1][1][1])) {
+        //mobile keyboard popup
+        if (window.game_is_mobile_device) {
+          self.current_text = "";
+          self.active = true;
+          let prompt_text = prompt();
+          if (!prompt_text) {
+            self.active = false;
+            self.current_text = self.placeholder;
+            return;
+          }
+          self.current_text = prompt_text;
+          if (self.max_length) {
+            if (self.current_text.length > self.max_length) {
+              self.current_text = self.current_text.slice(0, self.max_length);
+            }
+          }
+          if (!self.current_text) {
+            self.current_text = self.placeholder;
+          }
+          self.active = false;
+          return;
+        }
         if (self.current_text === self.placeholder) {
           self.current_text = "";
         }
@@ -1226,6 +1298,8 @@ class TextInput {
 let canvas = new Canvas([1200,700], "game-canvas");
 //12 fps
 //increase fps?
+
+//requestAnimationFrame(canvas.update)
 setInterval(function() {
   canvas.update();
 }, 1000/12);
@@ -1291,6 +1365,12 @@ function create_region_modal(desig) {
   //close button
   let close_button = new TextButton(canvas, [[region_modal.coords[1][0]-47, region_modal.coords[0][1]+47], [[region_modal.coords[1][0]-50, region_modal.coords[0][1]+10], [region_modal.coords[1][0]-10, region_modal.coords[0][1]+50]]], "x", "34px Arial", false, "black", "#041616", false, false, true, region_modal.close);
   region_modal.members.push(close_button);
+  //region name? number designation maybe?
+  //owner, neighbors (with "link"?)
+  //supply, wealth
+  //units
+  //buildings
+  //resources
 }
 
 //overlay path for game scene
@@ -1354,15 +1434,19 @@ function game_scene() {
     //if up, down, left, right
     function movement_handling(key) {
       switch (key) {
+        case "w":
         case "ArrowUp":
           window.gameTranslate[1] -= 3;
           break;
+        case "s":
         case "ArrowDown":
           window.gameTranslate[1] += 3;
           break;
+        case "a":
         case "ArrowLeft":
           window.gameTranslate[0] -= 3;
           break;
+        case "d":
         case "ArrowRight":
           window.gameTranslate[0] += 3;
           break;
