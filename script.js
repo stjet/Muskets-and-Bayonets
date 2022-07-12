@@ -608,8 +608,26 @@ window.game_is_mobile_device = is_mobile();
 //that should make things draw in the order that they should be in, much easier
 //for example, a building built after the overlay is initialized should be drawn before the overlay not after
 //obviously
+/**
+ * @param {any} item
+ * @param {string} priority
+ */
 Array.prototype.pushOrder = function(item, priority) {
-  //
+  //a building, resource, or unit icon on the map. must be above map and below overlay
+  if (!canvas) {
+    console.error("Array.pushOrder called before canvas initialized?");
+    return;
+  }
+  if (priority === "mapIcon") {
+    //so, find overlay and put itself right before it
+    let overlay_index = canvas.components.findIndex(element => element.image_url === "/images/nnom_overlay.png");
+    if (overlay_index === -1) {
+      //no overlay exists yet
+      canvas.components.push(item);
+    } else {
+      canvas.components.splice(overlay_index, 0, item);
+    }
+  }
 }
 
 //classes
@@ -1000,7 +1018,7 @@ class Building {
     //onclick that adds info to bottom left panel, also stops region modal from opening.
     //maybe special cursor?
     //
-    this.canvas.components.push(this);
+    this.canvas.components.pushOrder(this, "mapIcon");
   }
   update() {
     let mod_coords = scaleCoords(translateCoords(this.coords, window.gameTranslate), window.gameScaleFactor);
@@ -1033,7 +1051,7 @@ class Region {
     this.extensions = extensions
     //likely, will set onclick and possible mousemove functions externally
     //above should be set depending on scene
-    this.canvas.components.push(this);
+    this.canvas.components.pushOrder(this, "mapIcon");
     this.canvas.regions.push(this);
   }
   update() {
@@ -1622,7 +1640,7 @@ function selection_part_2_scene(starting_region) {
   //slogan/motto
   let slogan_input = new TextInput(canvas, [[center[0]/2-215, 160], [[center[0]/2-220, 145], [center[0]/2+220, 165]]], "This is our Slogan and we're Proud of it", "15px Arial", "gray", "black", "white", true, true, 64, ['"', '"'])
   //color (use same as help scene)
-  const colors = ["Red", "Maroon", "Green", "Lime", "Purple", "Orange", "Teal", "Slategray"];
+  const colors = ["Red", "Maroon", "Green", "Navy", "Lime", "Purple", "Orange", "Teal", "Slategray", "DeepSkyBlue"];
   let color_index = 0;
   let color_input = new Text(canvas, [center[0]/2-40, 200], colors[color_index], "22px Arial", colors[color_index], false, undefined, "color-picker");
   new TextButton(canvas, [[center[0]/2-250, 200], [[center[0]/2-255, 165], [center[0]/2-240, 200]]], "‹", "35px Arial", false, "black", "#041616", false, false, false, function() {
