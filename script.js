@@ -14,22 +14,29 @@ window.tick_interval_id = undefined;
 
 const buildings_info = {
   "settlement": {
-    //cost is in wealth
-    "co": 3,
+    //cost is in wealth and supply
+    "co": {
+      "wealth": 25,
+      "supply": 75
+    },
     //maintenance is in supply
-    "mt": 0,
+    "mt": 5,
+    //homes for units
+    "ho": 3,
     //duration of how long it takes to construct (in ticks) [which are days])
     "dur": 50,
     //pay period is how long it takes for the resources are produced, and maintenance paid)
-    "per": 15,
+    "per": 150,
     //production of resources
     "pr": {
       //citizens
       "ci": 1,
-      //wealth
-      "we": 1,
       //supply
       "su": 0
+    },
+    //special effects
+    "ef": {
+      //province wealth, happiness probably
     },
     //enables production of the units
     "en": {
@@ -44,6 +51,7 @@ const unit_stats = {
 
 //1 region makes 1 wealth per 30 days?
 
+//not const because we add properties. however, hardcoded properties should not change
 let regions_info = {
   "1": {
     "coords": [[204,422],[207,418],[213,418],[212,414],[219,414],[226,410],[235,406],[248,395],[254,389],[255,377],[263,375],[272,370],[279,364],[279,357],[284,357],[285,360],[290,367],[298,373],[299,381],[307,387],[320,398],[327,410],[328,423],[326,431],[323,431],[324,445],[327,451],[335,458],[336,464],[338,467],[337,475],[334,482],[333,488],[327,495],[325,501],[323,509],[317,511],[311,514],[308,518],[311,525],[324,532],[337,534],[356,535],[357,539],[365,546],[372,550],[371,554],[363,556],[353,558],[345,560],[341,563],[329,565],[322,568],[318,573],[314,584],[306,583],[296,587],[294,592],[291,588],[286,583],[271,583],[263,588],[241,588],[233,576],[230,574],[197,574],[194,572],[185,560],[189,556],[194,554],[217,555],[221,552],[233,552],[234,549],[240,548],[241,544],[263,544],[264,548],[269,551],[274,557],[275,557],[277,559],[282,561],[283,562],[303,563],[313,560],[314,558],[321,556],[319,545],[313,543],[304,542],[302,538],[295,540],[291,535],[281,535],[271,522],[257,515],[241,504],[235,499],[231,497],[229,494],[223,496],[221,491],[219,491],[215,483],[217,471],[219,460],[216,455],[211,448],[207,444],[203,441]],
@@ -525,12 +533,21 @@ let regions_info = {
   }
 };
 
+//add extra fields to each region
+for (let r_num=0; r_num < Object.keys(regions_info).length; r_num++) {
+  let l_desig = Object.keys(regions_info)[r_num];
+  regions_info[l_desig].buildings = [];
+  regions_info[l_desig].units = {};
+}
+
 //player's nation
 let self_nation = {
   name: "",
   slogan: "",
   color: "",
-  owned_regions: [] 
+  wealth: 0,
+  supply: 0,
+  owned_regions: []
 };
 
 //development util functions
@@ -586,6 +603,14 @@ function is_mobile() {
 }
 
 window.game_is_mobile_device = is_mobile();
+
+//this method is to allow canvas.components to have priorities
+//that should make things draw in the order that they should be in, much easier
+//for example, a building built after the overlay is initialized should be drawn before the overlay not after
+//obviously
+Array.prototype.pushOrder = function(item, priority) {
+  //
+}
 
 //classes
 class Canvas {
@@ -879,7 +904,6 @@ class Modal {
     this.close = this.close.bind(this);
   }
   close() {
-    console.log(this)
     //reenable map stuff
     this.canvas.scroll_temp_disabled = false;
     this.canvas.keydown_temp_disabled = false;
@@ -887,7 +911,6 @@ class Modal {
     //should also enable canvas onclick and stuff
     //remove self and members
     this.canvas.components = this.canvas.components.filter(function (item) {
-      console.log(item, this, item == this, item === this, this.members.includes(item), this.members)
       return this !== item && !this.members.includes(item);
     }, this);
   }
@@ -927,7 +950,7 @@ function scaleCoords(coords, scale) {
   //coords: [[x, y], [x, y]]
   let new_coords = [];
   for (let i=0; i < coords.length; i++) {
-    new_coords.push([coords[i][0]*1/scale, coords[i][1]*1/scale]);
+    new_coords.push([Math.round(coords[i][0]*1/scale), Math.round(coords[i][1]*1/scale)]);
   }
   return new_coords;
 }
@@ -945,9 +968,44 @@ function translateCoords(coords, translate) {
   return new_coords;
 }
 
+//find center point of a region
+function findAveragePoint(region_desig) {
+  let coords = regions_info[region_desig].coords;
+  let total_x = 0;
+  let total_y = 0;
+  for (let i=0; i < coords.length; i++) {
+    total_x += coords[i][0];
+    total_y += coords[i][1];
+  }
+  return [Math.round(total_x/coords.length), Math.round(total_y/coords.length)];
+}
+
+let settlementImage = new Image();
+settlementImage.src = "/images/buildings/Settlement.png";
+
+//just the picture of building on map, not info
 class Building {
   //picture of building
-  //river and walls could be an extension of this? or perhaps a seperate border class
+  constructor(canvas, region_desig, building_name) {
+    this.canvas = canvas;
+    this.region_desig = region_desig;
+    this.building_name = building_name;
+    //calculate coords of where to put
+    let living = ["settlement", "town", "city"];
+    if (living.includes(this.building_name)) {
+      let avg_p = findAveragePoint(this.region_desig);
+      this.coords = [[avg_p[0]-30, avg_p[1]-30], [avg_p[0]+30, avg_p[1]+30]];
+      this.buildingImage = settlementImage;
+    }
+    //onclick that adds info to bottom left panel, also stops region modal from opening.
+    //maybe special cursor?
+    //
+    this.canvas.components.push(this);
+  }
+  update() {
+    let mod_coords = scaleCoords(translateCoords(this.coords, window.gameTranslate), window.gameScaleFactor);
+    this.canvas.context.drawImage(this.buildingImage, mod_coords[0][0], mod_coords[0][1], mod_coords[1][0]-mod_coords[0][0], mod_coords[1][1]-mod_coords[0][1]);
+  }
 }
 
 class UnitFigure {
@@ -1503,7 +1561,7 @@ function game_scene() {
   //nation name box: lower left [555, 680]
   new Text(canvas, [555, 675], self_nation.name, "18px Arial", "black", false, 120, undefined);
   //1 second = 1 day as standard, but it should be able to be arbitrarily changed (fast forward)
-  new Text(canvas, [590, 540], "Year 0", "14px Arial", "black", "shadow-white", false, false, "clock-year");
+  new Text(canvas, [590, 540], "Year 0", "14px Arial", "black", "shadow-white", false, "clock-year");
   //center season text
   canvas.context.font = "16px Arial";
   let season_text_width = canvas.context.measureText("Planting").width;
@@ -1521,6 +1579,11 @@ function game_scene() {
   //pause
   new TextButton(canvas, [[0, 0], [[675, 535], [697, 560]]], false, false, "rgba(255, 255, 255, 0)", undefined, undefined, false, false, false, game_pause_button);
   //
+  //wealth and supply counters
+  new Text(canvas, [930, 612], String(self_nation.supply), "25px Arial", "black", undefined, 90, undefined);
+  new Text(canvas, [1054, 612], String(self_nation.wealth), "25px Arial", "black", undefined, 90, undefined);
+  //starting building
+  //new Building(canvas, window.starting_region, "settlement");
 }
 
 /**
@@ -1533,6 +1596,16 @@ function set_nation(name_input, slogan_input, color_input) {
   self_nation.name = name_input.current_text;
   self_nation.slogan = slogan_input.current_text;
   self_nation.color = color_input.text;
+  self_nation.owned_regions.push(window.starting_region);
+  //to the starting region (s? in the future) we want to add a settlement with 3 citizens
+  regions_info[window.starting_region].buildings.push({
+    "name": "Capital",
+    "type": "settlement",
+    "upgrades": {},
+    "homes": {
+      "citizens": 3
+    }
+  });
 }
 
 /**
