@@ -49,8 +49,15 @@ const unit_stats = {
   //
 };
 
-//1 region makes 1 wealth per 30 days?
+//sea tiles
+let sea_info = {
+  "S1": {
+    "coords": [[0,0],[370,0],[359,22],[348,57],[348,99],[374,153],[422,188],[459,198],[416,207],[360,241],[319,266],[255,285],[177,322],[136,351],[102,400],[75,469],[64,527],[59,580],[72,627],[54,604],[29,592],[0,598]],
+    "neighbors": ["S2", "S14", "S15", "S20"]
+  }
+};
 
+//1 region makes 1 wealth per 30 days?
 //not const because we add properties. however, hardcoded properties should not change
 let regions_info = {
   "1": {
@@ -652,6 +659,7 @@ class Canvas {
     this.frame = 0;
     //modifications
     this.regions = [];
+    this.sea = [];
     this.scroll_temp_disabled = true;
     this.keydown_temp_disabled = true;
     this.click_temp_disabled = false;
@@ -1028,6 +1036,36 @@ class Building {
 
 class UnitFigure {
   //picture of unit, like barbarian hordes, or to indicate military presence in region
+}
+
+class SeaTile {
+  /**
+   * @param {Canvas} canvas
+   * @param {number[][]} coords
+   * @param {string} desig
+   */
+  constructor(canvas, coords, desig) {
+    this.canvas = canvas;
+    this.og_coords = coords;
+    this.coords = coords;
+    this.desig = desig;
+    this.path = undefined;
+    this.canvas.components.pushOrder(this, "mapIcon");
+    this.canvas.sea.push(this);
+  }
+  update() {
+    //sea tiles don't need to be displayed, they already are on the base map
+    this.coords = translateCoords(this.og_coords, window.gameTranslate);
+    this.coords = scaleCoords(this.coords, window.gameScaleFactor);
+    let path = new Path2D();
+    path.moveTo(...this.coords[0]);
+    for (let i=1; i < this.coords.length; i++) {
+      path.lineTo(...this.coords[i]);
+    }
+    path.lineTo(...this.coords[0]);
+    this.path = path;
+    return;
+  }
 }
 
 class Region {
@@ -1449,6 +1487,26 @@ function create_region_modal(desig) {
   //resources
 }
 
+function create_sea_modal(desig) {
+  //actual modal
+  let sea_modal = new Modal(canvas, [[100, 100], [canvas.canvas.width-100, canvas.canvas.height-100]], "white", true, 0.7, "black");
+  //close button
+  let close_button = new TextButton(canvas, [[sea_modal.coords[1][0]-47, sea_modal.coords[0][1]+47], [[sea_modal.coords[1][0]-50, sea_modal.coords[0][1]+10], [sea_modal.coords[1][0]-10, sea_modal.coords[0][1]+50]]], "x", "34px Arial", false, "black", "#041616", false, false, true, sea_modal.close);
+  sea_modal.members.push(close_button);
+  //
+}
+
+function point_in_region(p, desig) {
+  let in_region = false;
+  let self = regions_info[desig].region_obj;
+  for (let i=0; i < self.paths.length; i++) {
+    if (canvas.context.isPointInPath(self.paths[i], p[0], p[1])) {
+      in_region = true;
+    }
+  }
+  return in_region;
+}
+
 //overlay path for game scene
 let overlay_transparent = new OverlayTransparentPath([[24,541],[21,22],[1174,24],[1175,541],[870,542],[869,562],[806,563],[807,531],[664,527],[642,504],[657,473],[640,482],[642,456],[621,441],[615,430],[605,433],[606,442],[582,449],[578,469],[583,479],[569,473],[586,505],[554,531],[550,563],[355,563],[355,545]]);
 function game_scene() {
@@ -1553,25 +1611,49 @@ function game_scene() {
     regions_info[regions_keys[i]].region_obj = new Region(canvas, region_info.coords, "white", regions_keys[i], region_info.extensions);
     //set onclick and possibly hover effects
     let self = regions_info[regions_keys[i]].region_obj;
-    regions_info[regions_keys[i]].region_obj.click = function(e) {
+    self.click = function(e) {
       if (self.canvas.click_temp_disabled) {
         return;
       }
       if (canvas.context.isPointInPath(overlay_transparent.get_path(), e.offsetX, e.offsetY)) {
         //inside the view window, not on the overlay. ok to click
-        let in_region = false;
-        for (let i=0; i < self.paths.length; i++) {
-          if (canvas.context.isPointInPath(self.paths[i], e.offsetX, e.offsetY)) {
-            in_region = true;
-          }
-        }
+        let in_region = point_in_region([e.offsetX, e.offsetY], self.desig);
         if (in_region) {
           //open up region popup
           create_region_modal(self.desig);
         }
       }
     }
-    canvas.addEvent("click", regions_info[regions_keys[i]].region_obj, false);
+    canvas.addEvent("click", self, false);
+  }
+  let sea_keys = Object.keys(sea_info);
+  for (let j=0; j < sea_keys.length; j++) {
+    sea_info[sea_keys[j]].sea_obj = new SeaTile(canvas, sea_info[sea_keys[j]].coords, sea_keys[j]);
+    let self = sea_info[sea_keys[j]].sea_obj;
+    self.click = function(e) {
+      if (self.canvas.click_temp_disabled) {
+        return;
+      }
+      //inside the view window, not on the overlay. ok to click
+      if (canvas.context.isPointInPath(overlay_transparent.get_path(), e.offsetX, e.offsetY)) {
+        if (canvas.context.isPointInPath(self.path, e.offsetX, e.offsetY)) {
+          //make sure its not in neighbors
+          let cancel = false;
+          for (let i=0; i < sea_info[self.desig].neighbors.length; i++) {
+            let n_desig = sea_info[self.desig].neighbors[i];
+            if (!n_desig.startsWith("S")) {
+              if (point_in_region([e.offsetX, e.offsetY], n_desig)) {
+                cancel = true;
+              }
+            }
+          }
+          if (!cancel) {
+            create_sea_modal(self.desig);
+          }
+        }
+      }
+    }
+    canvas.addEvent("click", self, false);
   }
   regions_info[window.starting_region].region_obj.color = self_nation.color;
   //crown is around 15 pixels off center
