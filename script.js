@@ -12,6 +12,9 @@ window.starting_region = undefined;
 window.ticks = 0;
 window.tick_interval_id = undefined;
 
+window.game_views = ["buildings", "units", "none"];
+window.game_view = "buildings";
+
 const buildings_info = {
   "settlement": {
     //cost is in wealth and supply
@@ -54,6 +57,14 @@ let sea_info = {
   "S1": {
     "coords": [[0,0],[370,0],[359,22],[348,57],[348,99],[374,153],[422,188],[459,198],[416,207],[360,241],[319,266],[255,285],[177,322],[136,351],[102,400],[75,469],[64,527],[59,580],[72,627],[54,604],[29,592],[0,598]],
     "neighbors": ["S2", "S14", "S15", "S20"]
+  },
+  "S2": {
+    "coords": [[380,0],[903,0],[907,16],[903,38],[842,66],[787,94],[723,126],[703,133],[676,134],[646,146],[621,178],[607,214],[604,256],[580,233],[551,212],[493,193],[447,188],[414,174],[375,140],[357,104],[359,46]],
+    "neighbors": ["S1", "S3", "S6", "S7", "S15"]
+  },
+  "S3": {
+    "coords": [[915,37],[918,12],[909,0],[1492,0],[1492,26],[1478,72],[1468,71],[1452,83],[1429,81],[1398,68],[1372,66],[1362,67],[1334,63],[1318,68],[1315,76],[1328,86],[1365,102],[1375,94],[1393,96],[1420,113],[1440,144],[1442,175],[1458,204],[1472,208],[1510,235],[1521,244],[1482,250],[1450,259],[1434,226],[1403,176],[1360,140],[1338,133],[1315,114],[1313,102],[1265,84],[1238,76],[1182,54],[1161,52],[1158,64],[1166,86],[1115,52],[1050,25],[987,21],[947,24]],
+    "neighbors": ["S2", "S4", "S6", "15", "16", "17"]
   }
 };
 
@@ -1007,7 +1018,7 @@ function findAveragePoint(region_desig) {
 }
 
 let settlementImage = new Image();
-settlementImage.src = "/images/buildings/Settlement.png";
+settlementImage.src = "/images/buildings/settlement.png";
 
 //just the picture of building on map, not info
 class Building {
@@ -1016,9 +1027,10 @@ class Building {
     this.canvas = canvas;
     this.region_desig = region_desig;
     this.building_name = building_name;
+    this.path = undefined;
     //calculate coords of where to put
-    let living = ["settlement", "town", "city"];
-    if (living.includes(this.building_name)) {
+    this.living = ["settlement", "town", "city"];
+    if (this.living.includes(this.building_name)) {
       let avg_p = findAveragePoint(this.region_desig);
       this.coords = [[avg_p[0]-30, avg_p[1]-30], [avg_p[0]+30, avg_p[1]+30]];
       this.buildingImage = settlementImage;
@@ -1026,11 +1038,19 @@ class Building {
     //onclick that adds info to bottom left panel, also stops region modal from opening.
     //maybe special cursor?
     //
+    regions_info[this.region_desig].region_obj.buildings.push(this);
     this.canvas.components.pushOrder(this, "mapIcon");
   }
   update() {
     let mod_coords = scaleCoords(translateCoords(this.coords, window.gameTranslate), window.gameScaleFactor);
     this.canvas.context.drawImage(this.buildingImage, mod_coords[0][0], mod_coords[0][1], mod_coords[1][0]-mod_coords[0][0], mod_coords[1][1]-mod_coords[0][1]);
+    //make path
+    let path = new Path2D();
+    if (this.living.includes(this.building_name)) {
+      //center x, center y, radius, start angle, end angle
+      path.arc((mod_coords[0][0]+mod_coords[1][0])/2, (mod_coords[0][1]+mod_coords[1][1])/2, (mod_coords[1][0]-mod_coords[0][0])/2, 0, 2*Math.PI);
+    }
+    this.path = path;
   }
 }
 
@@ -1087,6 +1107,8 @@ class Region {
     this.paths = [];
     //extensions are array of extra coords. Essentially detaches areas that are still part of the region. In our case its islands and stuff
     this.extensions = extensions
+    //building icons on this region
+    this.buildings = [];
     //likely, will set onclick and possible mousemove functions externally
     //above should be set depending on scene
     this.canvas.components.pushOrder(this, "mapIcon");
@@ -1504,6 +1526,12 @@ function point_in_region(p, desig) {
       in_region = true;
     }
   }
+  //make sure its not in a building
+  for (let i=0; i < self.buildings.length; i++) {
+    if (canvas.context.isPointInPath(self.buildings[i].path, p[0], p[1])) {
+      in_region = false;
+    }
+  }
   return in_region;
 }
 
@@ -1638,6 +1666,7 @@ function game_scene() {
       if (canvas.context.isPointInPath(overlay_transparent.get_path(), e.offsetX, e.offsetY)) {
         if (canvas.context.isPointInPath(self.path, e.offsetX, e.offsetY)) {
           //make sure its not in neighbors
+          /*
           let cancel = false;
           for (let i=0; i < sea_info[self.desig].neighbors.length; i++) {
             let n_desig = sea_info[self.desig].neighbors[i];
@@ -1650,6 +1679,8 @@ function game_scene() {
           if (!cancel) {
             create_sea_modal(self.desig);
           }
+          */
+          create_sea_modal(self.desig);
         }
       }
     }
@@ -1683,7 +1714,7 @@ function game_scene() {
   new Text(canvas, [930, 612], String(self_nation.supply), "25px Arial", "black", undefined, 90, undefined);
   new Text(canvas, [1054, 612], String(self_nation.wealth), "25px Arial", "black", undefined, 90, undefined);
   //starting building
-  //new Building(canvas, window.starting_region, "settlement");
+  new Building(canvas, window.starting_region, "settlement");
 }
 
 /**
@@ -1722,7 +1753,7 @@ function selection_part_2_scene(starting_region) {
   //slogan/motto
   let slogan_input = new TextInput(canvas, [[center[0]/2-215, 160], [[center[0]/2-220, 145], [center[0]/2+220, 165]]], "This is our Slogan and we're Proud of it", "15px Arial", "gray", "black", "white", true, true, 64, ['"', '"'])
   //color (use same as help scene)
-  const colors = ["Red", "Maroon", "Green", "Navy", "Lime", "Purple", "Orange", "Teal", "Slategray", "DeepSkyBlue"];
+  const colors = ["Red", "Maroon", "Green", "DarkBlue", "Lime", "Purple", "Orange", "Teal", "Slategray", "DeepSkyBlue"];
   let color_index = 0;
   let color_input = new Text(canvas, [center[0]/2-40, 200], colors[color_index], "22px Arial", colors[color_index], false, undefined, "color-picker");
   new TextButton(canvas, [[center[0]/2-250, 200], [[center[0]/2-255, 165], [center[0]/2-240, 200]]], "‹", "35px Arial", false, "black", "#041616", false, false, false, function() {
