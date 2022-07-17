@@ -654,7 +654,7 @@ Array.prototype.pushOrder = function(item, priority) {
   }
   if (priority === "mapIcon") {
     //so, find overlay and put itself right before it
-    let overlay_index = canvas.components.findIndex(element => element.image_url === "/images/nnom_overlay.png");
+    let overlay_index = canvas.components.findIndex(element => element.image_url === "/images/nnom_overlay.png" || element.image_url === "/images/nnom_overlay2.png");
     if (overlay_index === -1) {
       //no overlay exists yet
       canvas.components.push(item);
