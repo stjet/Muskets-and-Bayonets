@@ -65,6 +65,22 @@ let sea_info = {
   "S3": {
     "coords": [[915,37],[918,12],[909,0],[1492,0],[1492,26],[1478,72],[1468,71],[1452,83],[1429,81],[1398,68],[1372,66],[1362,67],[1334,63],[1318,68],[1315,76],[1328,86],[1365,102],[1375,94],[1393,96],[1420,113],[1440,144],[1442,175],[1458,204],[1472,208],[1510,235],[1521,244],[1482,250],[1450,259],[1434,226],[1403,176],[1360,140],[1338,133],[1315,114],[1313,102],[1265,84],[1238,76],[1182,54],[1161,52],[1158,64],[1166,86],[1115,52],[1050,25],[987,21],[947,24]],
     "neighbors": ["S2", "S4", "S6", "15", "16", "17"]
+  },
+  "S4": {
+    "coords": [[1508,0],[1704,0],[1717,36],[1741,70],[1774,112],[1795,159],[1807,210],[1786,281],[1754,285],[1723,295],[1693,299],[1652,297],[1610,297],[1588,288],[1577,278],[1555,265],[1547,259],[1536,262],[1536,273],[1541,289],[1513,285],[1489,284],[1457,267],[1480,259],[1529,253],[1530,239],[1523,218],[1514,210],[1507,191],[1497,173],[1476,161],[1467,150],[1467,139],[1476,130],[1483,112],[1487,87],[1482,80],[1498,39],[1505,5]],
+    "neighbors": ["S3", "S5", "17", "18", "20", "21"]
+  },
+  "S5": {
+    "coords": [[2272,51],[2284,65],[2295,55],[2314,38],[2332,23],[2353,0],[2358,0],[2358,9],[2345,21],[2336,34],[2316,62],[2293,78],[2270,102],[2262,106],[2258,104],[2258,98],[2264,93],[2278,73],[2283,66],[2271,52],[2295,20],[2310,0],[1713,0],[1727,31],[1756,72],[1788,110],[1808,165],[1815,194],[1815,215],[1806,251],[1798,279],[1814,279],[1829,277],[1858,279],[1874,287],[1876,296],[1862,305],[1837,307],[1823,307],[1825,311],[1837,313],[1849,315],[1855,313],[1882,313],[1902,302],[1947,281],[1938,261],[1927,271],[1897,284],[1880,284],[1883,271],[1892,259],[1926,242],[1970,221],[1983,204],[1999,195],[2014,195],[2051,178],[2070,174],[2078,167],[2090,167],[2106,160],[2124,166],[2124,177],[2094,194],[2030,218],[2012,223],[1990,236],[1937,262],[1949,281],[1979,267],[2050,232],[2110,203],[2159,180],[2193,158],[2214,140],[2232,123],[2230,118],[2210,134],[2173,159],[2158,164],[2150,160],[2150,144],[2209,93]],
+    "neighbors": ["S4", "21", "25", "26"]
+  },
+  "S6": {
+    "coords": [[831,243],[812,220],[786,179],[760,157],[728,137],[754,122],[810,92],[876,59],[944,36],[1004,32],[1066,41],[1144,78],[1155,91],[1136,96],[1133,108],[1136,118],[1118,117],[1110,113],[1095,118],[1079,102],[1067,108],[1044,123],[1032,126],[1000,123],[981,132],[980,145],[965,150],[952,127],[929,116],[922,122],[923,160],[916,168],[902,175],[905,183],[892,188],[887,184],[873,180],[851,184],[826,199],[816,210],[819,218],[824,224],[835,224],[852,219],[869,213],[885,206],[892,197],[892,189],[904,185],[908,191],[920,196],[941,200],[964,196],[977,184],[976,167],[969,159],[965,150],[980,146],[986,156],[994,166],[1023,172],[1047,184],[1052,193],[1051,204],[1055,213],[1071,228],[1084,239],[1032,255],[956,263],[939,271],[911,272],[877,269],[858,261]],
+    "neighbors": ["S2", "S3", "S7", "S8", "14"]
+  },
+  "S7": {
+    "coords": [[819,244],[863,273],[888,280],[922,280],[966,269],[953,280],[929,296],[914,331],[920,370],[929,404],[927,441],[915,480],[883,510],[832,523],[779,515],[723,491],[679,446],[653,392],[618,317],[613,276],[610,235],[621,187],[644,161],[674,145],[714,140],[762,169],[806,223],[816,239],[744,251],[734,245],[719,246],[712,233],[710,228],[705,207],[680,200],[667,208],[662,222],[650,230],[639,231],[636,233],[648,259],[663,286],[642,288],[635,293],[638,306],[654,311],[683,306],[710,302],[715,287],[746,276],[752,264],[745,251],[774,258],[762,270],[753,286],[775,300],[795,303],[724,350],[716,349],[702,358],[692,366],[698,386],[712,395],[728,393],[735,371],[751,378],[746,386],[760,390],[773,394],[782,405],[797,412],[814,444],[838,459],[843,464],[860,466],[885,460],[889,447],[886,426],[898,420],[898,409],[881,399],[871,395],[857,386],[852,363],[838,344],[831,321],[823,317],[819,330],[816,362],[808,372],[798,370],[780,366],[757,370],[750,377],[733,370],[724,352],[796,302],[805,302],[809,290],[805,286],[805,275],[807,266],[799,258],[785,256],[772,260],[745,251],[816,239]],
+    "neighbors": ["S2", "S6", "S8", "S15", "S16", "S17", "5", "6"]
   }
 };
 
@@ -1017,8 +1033,27 @@ function findAveragePoint(region_desig) {
   return [Math.round(total_x/coords.length), Math.round(total_y/coords.length)];
 }
 
+let game_overlay = new Image();
+game_overlay.src = "/images/nnom_overlay.png";
+let game_overlay2 = new Image();
+game_overlay2.src = "/images/nnom_overlay2.png";
+
+function toggleOverlay() {
+  //toggles between 9 button overlay and info panel overlay (difference is in lower left corner)
+  if (window.gameOverlayObject.image_url === "/images/nnom_overlay.png") {
+    window.gameOverlayObject.image_url = "/images/nnom_overlay2.png";
+    window.gameOverlayObject.image = game_overlay2;
+  } else if (window.gameOverlayObject.image_url === "/images/nnom_overlay2.png") {
+    window.gameOverlayObject.image_url = "/images/nnom_overlay.png";
+    window.gameOverlayObject.image = game_overlay;
+  }
+}
+
 let settlementImage = new Image();
 settlementImage.src = "/images/buildings/settlement.png";
+
+let settlementImage_simp = new Image();
+settlementImage_simp.src = "/images/buildings/settlement_simp.png"
 
 //just the picture of building on map, not info
 class Building {
@@ -1028,22 +1063,54 @@ class Building {
     this.region_desig = region_desig;
     this.building_name = building_name;
     this.path = undefined;
+    this.clicked = false;
+    //text classes and what not that appear in panel on click of building
+    this.info_objs = [];
     //calculate coords of where to put
     this.living = ["settlement", "town", "city"];
     if (this.living.includes(this.building_name)) {
       let avg_p = findAveragePoint(this.region_desig);
       this.coords = [[avg_p[0]-30, avg_p[1]-30], [avg_p[0]+30, avg_p[1]+30]];
       this.buildingImage = settlementImage;
+      this.simpBuildingImage = settlementImage_simp;
     }
     //onclick that adds info to bottom left panel, also stops region modal from opening.
     //maybe special cursor?
-    //
+    this.canvas.addEvent("click", this, false);
     regions_info[this.region_desig].region_obj.buildings.push(this);
     this.canvas.components.pushOrder(this, "mapIcon");
   }
+  click(e) {
+    if (this.canvas.click_temp_disabled) {
+      return;
+    }
+    if (this.canvas.context.isPointInPath(this.path, e.offsetX, e.offsetY) && !this.clicked) {
+      toggleOverlay();
+      //valid click
+      let name = new Text(this.canvas, [370, 605], this.building_name, "18px Arial", "black", false, 180, undefined);
+      this.info_objs.push(name);
+      this.clicked = true;
+    } else {
+      if (this.clicked) {
+        toggleOverlay();
+      }
+      //this will also trigger if settlement clicked twice. this is intended behavior
+      this.clicked = false;
+      let self = this;
+      this.canvas.components = this.canvas.components.filter(function(value) {
+        return !self.info_objs.includes(value);
+      });
+    }
+  }
   update() {
+    let use_image;
+    if (window.gameScaleFactor <= 1) {
+      use_image = this.buildingImage;
+    } else {
+      use_image = this.simpBuildingImage;
+    }
     let mod_coords = scaleCoords(translateCoords(this.coords, window.gameTranslate), window.gameScaleFactor);
-    this.canvas.context.drawImage(this.buildingImage, mod_coords[0][0], mod_coords[0][1], mod_coords[1][0]-mod_coords[0][0], mod_coords[1][1]-mod_coords[0][1]);
+    this.canvas.context.drawImage(use_image, mod_coords[0][0], mod_coords[0][1], mod_coords[1][0]-mod_coords[0][0], mod_coords[1][1]-mod_coords[0][1]);
     //make path
     let path = new Path2D();
     if (this.living.includes(this.building_name)) {
@@ -1447,8 +1514,6 @@ let affinity_start_background = new Image();
 affinity_start_background.src = "/images/modified_affinity_screen.png";
 let transparent_selection_map = new Image();
 transparent_selection_map.src = "/images/transparent_selection_map.png";
-let game_overlay = new Image();
-game_overlay.src = "/images/nnom_overlay.png";
 
 function tick() {
   //1 second = 1 day
@@ -1502,6 +1567,9 @@ function create_region_modal(desig) {
   let close_button = new TextButton(canvas, [[region_modal.coords[1][0]-47, region_modal.coords[0][1]+47], [[region_modal.coords[1][0]-50, region_modal.coords[0][1]+10], [region_modal.coords[1][0]-10, region_modal.coords[0][1]+50]]], "x", "34px Arial", false, "black", "#041616", false, false, true, region_modal.close);
   region_modal.members.push(close_button);
   //region name? number designation maybe?
+  //todo: add names when nnom finishes them
+  let name = new Text(canvas, [750, 150], "(ID: "+desig+")", "35px Arial", "gray", false, 100, undefined);
+  region_modal.members.push(name);
   //owner, neighbors (with "link"?)
   //supply, wealth
   //units
@@ -1515,6 +1583,8 @@ function create_sea_modal(desig) {
   //close button
   let close_button = new TextButton(canvas, [[sea_modal.coords[1][0]-47, sea_modal.coords[0][1]+47], [[sea_modal.coords[1][0]-50, sea_modal.coords[0][1]+10], [sea_modal.coords[1][0]-10, sea_modal.coords[0][1]+50]]], "x", "34px Arial", false, "black", "#041616", false, false, true, sea_modal.close);
   sea_modal.members.push(close_button);
+  let name = new Text(canvas, [750, 150], "(ID: "+desig+")", "35px Arial", "gray", false, 100, undefined);
+  sea_modal.members.push(name);
   //
 }
 
@@ -1688,7 +1758,7 @@ function game_scene() {
   }
   regions_info[window.starting_region].region_obj.color = self_nation.color;
   //crown is around 15 pixels off center
-  new StaticBackground(canvas, "/images/nnom_overlay.png", false, game_overlay)
+  window.gameOverlayObject = new StaticBackground(canvas, "/images/nnom_overlay2.png", false, game_overlay2);
   //nation name box: lower left [555, 680]
   new Text(canvas, [555, 675], self_nation.name, "18px Arial", "black", false, 120, undefined);
   //1 second = 1 day as standard, but it should be able to be arbitrarily changed (fast forward)
