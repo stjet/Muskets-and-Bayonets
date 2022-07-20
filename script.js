@@ -779,8 +779,8 @@ class TextButton {
         setTimeout(function() {
           self.feedback = false;
         }, 175);
-        //now run given function
-        onclick();
+        //now run given function, pass in optional self parameter
+        onclick(self);
       }
     };
     this.mousemove = function(e) {
@@ -993,6 +993,12 @@ class Modal {
     }
   }
 }
+
+/*
+class EventModal {
+  //
+}
+*/
 
 /**
  * @param {number[][]} coords
@@ -1561,6 +1567,19 @@ function normal_speed_button() {
 }
 
 function create_region_modal(desig) {
+  function switch_to_overview() {
+    //
+  }
+  function switch_to_construct() {
+    //
+  }
+  function switch_to_taxes() {
+    //
+  }
+  function switch_to_units() {
+    //
+  }
+  let player_owned_region = self_nation.owned_regions.includes(desig);
   //actual modal
   let region_modal = new Modal(canvas, [[100, 100], [canvas.canvas.width-100, canvas.canvas.height-100]], "white", true, 0.7, "black");
   //close button
@@ -1570,6 +1589,72 @@ function create_region_modal(desig) {
   //todo: add names when nnom finishes them
   let name = new Text(canvas, [750, 150], "(ID: "+desig+")", "35px Arial", "gray", false, 100, undefined);
   region_modal.members.push(name);
+  //sidebar: overview, build, taxes, units (should be buttons under the hood)
+  //#282828
+  //new TextButton(canvas, [[center[0]/2-30, 425], [[center[0]/2-100, 390], [center[0]/2+100, 440]]], "Play", "28px Arial", "red", "#e5d5e3", "white", true, "black", false, selection_part_1_scene);
+  let overview = new TextButton(canvas, [[150, 205], [[140, 160], [275, 210]]], "Overview", "28px Arial", false, "black", "black", false, "black", true, function(self) {
+    //make sure not already selected
+    if (!self.underline) {
+      canvas.canvas.dispatchEvent(new CustomEvent("customsectionchange", {detail: {picked: "overview"}}));
+      self.underline = true;
+      switch_to_overview();
+    }
+  });
+  overview.customsectionchange = function(e) {
+    if (e.detail.picked !== "overview") {
+      this.underline = false;
+    }
+  }
+  region_modal.members.push(overview);
+  let construct, taxes;
+  let unit_coords = [[150, 265], [[140, 220], [275, 270]]];
+  if (player_owned_region) {
+    construct = new TextButton(canvas, [[150, 265], [[140, 220], [275, 270]]], "Construct", "28px Arial", false, "black", "black", false, "black", false, function(self) {
+      //make sure not already selected
+      if (!self.underline) {
+        canvas.canvas.dispatchEvent(new CustomEvent("customsectionchange", {detail: {picked: "construct"}}));
+        self.underline = true;
+        switch_to_construct();
+      }
+    });
+    construct.customsectionchange = function(e) {
+      if (e.detail.picked !== "construct") {
+        this.underline = false;
+      }
+    }
+    region_modal.members.push(construct);
+    taxes = new TextButton(canvas, [[150, 325], [[140, 280], [275, 330]]], "Taxes", "28px Arial", false, "black", "black", false, "black", false, function(self) {
+      //make sure not already selected
+      if (!self.underline) {
+        canvas.canvas.dispatchEvent(new CustomEvent("customsectionchange", {detail: {picked: "taxes"}}));
+        self.underline = true;
+        switch_to_taxes();
+      }
+    });
+    taxes.customsectionchange = function(e) {
+      if (e.detail.picked !== "taxes") {
+        this.underline = false;
+      }
+    }
+    region_modal.members.push(taxes);
+    canvas.addEvent("customsectionchange", [construct, taxes], false);
+    unit_coords = [[150, 385], [[140, 340], [275, 390]]];
+  }
+  let units = new TextButton(canvas, unit_coords, "Units", "28px Arial", false, "black", "black", false, "black", false, function(self) {
+    //make sure not already selected
+    if (!self.underline) {
+      canvas.canvas.dispatchEvent(new CustomEvent("customsectionchange", {detail: {picked: "units"}}));
+      self.underline = true;
+      switch_to_units();
+    }
+  });
+  units.customsectionchange = function(e) {
+    if (e.detail.picked !== "units") {
+      this.underline = false;
+    }
+  }
+  region_modal.members.push(units);
+  canvas.addEvent("customsectionchange", [overview, units], false);
   //owner, neighbors (with "link"?)
   //supply, wealth
   //units
