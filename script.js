@@ -830,9 +830,11 @@ class TextButton {
       } else if (this.background_color) {
         //much easier
         if (this.border) {
-          this.canvas.context.strokeRect(this.coords[1][0][0], this.coords[1][0][1], this.background_color, this.coords[1][1][0]-this.coords[1][0][0], this.coords[1][1][1]-this.coords[1][0][1]);
+          this.canvas.context.strokeStyle = this.border;
+          this.canvas.context.strokeRect(this.coords[1][0][0], this.coords[1][0][1], this.coords[1][1][0]-this.coords[1][0][0], this.coords[1][1][1]-this.coords[1][0][1]);
         }
-        this.canvas.context.fillRect(this.coords[1][0][0], this.coords[1][0][1], this.background_color, this.coords[1][1][0]-this.coords[1][0][0], this.coords[1][1][1]-this.coords[1][0][1]);
+        this.canvas.context.fillStyle = this.background_color;
+        this.canvas.context.fillRect(this.coords[1][0][0], this.coords[1][0][1], this.coords[1][1][0]-this.coords[1][0][0], this.coords[1][1][1]-this.coords[1][0][1]);
       }
     }
     //text
