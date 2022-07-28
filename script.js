@@ -572,6 +572,7 @@ for (let r_num=0; r_num < Object.keys(regions_info).length; r_num++) {
   let l_desig = Object.keys(regions_info)[r_num];
   regions_info[l_desig].buildings = [];
   regions_info[l_desig].units = {};
+  regions_info[l_desig].residence_tax = 2;
 }
 
 //player's nation
@@ -579,6 +580,7 @@ let self_nation = {
   name: "",
   slogan: "",
   color: "",
+  land_tax: 2,
   wealth: 0,
   supply: 0,
   owned_regions: []
@@ -634,6 +636,10 @@ function is_mobile() {
     }
   }
   return false;
+}
+
+function distance(p1, p2) {
+  return Math.round(Math.sqrt((Math.abs(p1[0]-p2[0])**2)+(Math.abs(p1[1]-p2[1])**2)));
 }
 
 window.game_is_mobile_device = is_mobile();
@@ -754,6 +760,18 @@ class Canvas {
 }
 
 class TextButton {
+  /**
+   * @param {Canvas} canvas
+   * @param {[number[], number[][]]} coords
+   * @param {string} text
+   * @param {string} text_info
+   * @param {string} background_color
+   * @param {string} text_color
+   * @param {string} feedback_text_color
+   * @param {boolean} rounded
+   * @param {string} border
+   * @param {boolean} underline
+   */
   constructor(canvas, coords, text, text_info, background_color, text_color, feedback_text_color, rounded, border, underline, onclick) {
     this.canvas = canvas;
     //coords is [[text_x, text_y], [[button_top_x, button_top_y], [button_bottom_x, button_bottom_y]]]
@@ -1506,6 +1524,105 @@ class TextInput {
   }
 }
 
+class Slider {
+  /**
+   * @param {Canvas} canvas
+   * @param {[number[], number[]]} coords
+   * @param {string[]} points
+   * @param {string} default_point
+   * @param {string} color
+   * @param {string} circle_color
+   * @param {string} text_info
+   */
+  constructor(canvas, coords, points, default_point, color, circle_color, text_info, onchange) {
+    this.canvas = canvas;
+    //[[start], [end]]
+    this.coords = coords;
+    this.points = points;
+    this.current = default_point;
+    this.color = color;
+    this.circle_color = circle_color;
+    this.text_info = text_info;
+    this.onchange = onchange;
+    //indicates whether being currently dragged or not
+    this.dragging = false;
+    //onclick events, drag (onmousedown, onmouseup)
+    this.canvas.addEvent("click", [this], false);
+    this.canvas.addEvent("mousedown", [this], false);
+    this.canvas.addEvent("mouseup", [this], false);
+    this.canvas.components.push(this);
+  }
+  mousedown(e) {
+    let p_interval = (this.coords[1][0] - this.coords[0][0])/(this.points.length - 1);
+    for (let i=0; i < this.points.length; i++) {
+      let p_dist = distance([this.coords[0][0]+(p_interval*i), this.coords[0][1]], [e.offsetX, e.offsetY]);
+      if (p_dist < 15) {
+        this.dragging = true;
+      }
+    }
+  }
+  mouseup(e) {
+    if (!this.dragging) return;
+    let p_interval = (this.coords[1][0] - this.coords[0][0])/(this.points.length - 1);
+    for (let i=0; i < this.points.length; i++) {
+      let p_dist = distance([this.coords[0][0]+(p_interval*i), this.coords[0][1]], [e.offsetX, e.offsetY]);
+      //if points are less than 15 pixels apart that would be bad. dont do that people!
+      if (p_dist < 15) {
+        this.current = this.points[i];
+        this.onchange(this.current);
+      }
+    }
+  }
+  click(e) {
+    let p_interval = (this.coords[1][0] - this.coords[0][0])/(this.points.length - 1);
+    for (let i=0; i < this.points.length; i++) {
+      let p_dist = distance([this.coords[0][0]+(p_interval*i), this.coords[0][1]], [e.offsetX, e.offsetY]);
+      //if points are less than 15 pixels apart that would be bad. dont do that people!
+      if (p_dist < 15) {
+        this.current = this.points[i];
+        this.onchange(this.current);
+      }
+    }
+  }
+  update() {
+    this.canvas.context.fillStyle = this.color;
+    this.canvas.context.strokeStyle = this.color;
+    this.canvas.context.font = this.text_info;
+    //this is the horizontal line where you drag at
+    let path = new Path2D();
+    path.moveTo(this.coords[0][0], this.coords[0][1]);
+    path.lineTo(this.coords[1][0], this.coords[1][1]);
+    //change line size?
+    this.canvas.context.stroke(path);
+    let p_interval = (this.coords[1][0] - this.coords[0][0])/(this.points.length - 1);
+    for (let i=0; i < this.points.length; i++) {
+      //the little vertical lines indicating where a point is
+      let path2 = new Path2D();
+      path2.moveTo(this.coords[0][0]+(p_interval*i), this.coords[0][1]-6);
+      path2.lineTo(this.coords[0][0]+(p_interval*i), this.coords[0][1]+6);
+      this.canvas.context.stroke(path2);
+      this.canvas.context.fillText(this.points[i], this.coords[0][0]+(p_interval*i)-3, this.coords[0][1]+20);
+    }
+    //create circle indicator where the current point is
+    let path3 = new Path2D();
+    this.canvas.context.fillStyle = this.circle_color;
+    path3.arc(this.coords[0][0]+(p_interval*this.points.indexOf(this.current)), this.coords[0][1], 7, 0, 2*Math.PI);
+    this.canvas.context.fill(path3);
+  }
+}
+
+//shorthand functions for unit objects
+function make_citizen(desig, building_name) {
+  return {
+    name: "citizen",
+    task: false,
+    location: {
+      region: desig,
+      building: building_name
+    }
+  };
+}
+
 let canvas = new Canvas([1200,700], "game-canvas");
 //12 fps
 //increase fps?
@@ -1523,11 +1640,29 @@ affinity_start_background.src = "/images/modified_affinity_screen.png";
 let transparent_selection_map = new Image();
 transparent_selection_map.src = "/images/transparent_selection_map.png";
 
+function residence_tax_payment(pay_period) {
+  for (let i=0; i < self_nation.owned_regions.length; i++) {
+    let o_region = regions_info[self_nation.owned_regions[i]];
+    let citizens = 0;
+    for (let j=0; j < o_region.buildings.length; j++) {
+      let o_building = o_region.buildings[j];
+      citizens += o_building.homes.filter(function (item) {
+        return item.name === "citizen";
+      }).length;
+    }
+    self_nation.wealth += (o_region.residence_tax * citizens) / pay_period;
+  }
+}
+
 function tick() {
   //1 second = 1 day
   //update time
   //apparently js ints are accurate up to 15 digits, so with 1 tick a second, should not overflow or be inaccurate
   window.ticks++;
+  //tax payments every season change
+  residence_tax_payment(60);
+  canvas.canvas.dispatchEvent(new CustomEvent("customtextchange", {detail: {"wealth-counter": Math.floor(self_nation.wealth)}}));
+  canvas.canvas.dispatchEvent(new CustomEvent("customtextchange", {detail: {"supply-counter": self_nation.supply}}));
   let years = Math.floor(window.ticks/360);
   let seasons = Math.floor((window.ticks - years*360) / 90);
   let days = ((window.ticks - years*360) - seasons*90);
@@ -1569,24 +1704,47 @@ function normal_speed_button() {
 }
 
 function create_region_modal(desig) {
-  function switch_to_overview() {
-    //
-  }
-  function switch_to_construct() {
-    //
-  }
-  function switch_to_taxes() {
-    //
-  }
-  function switch_to_units() {
-    //
-  }
   let player_owned_region = self_nation.owned_regions.includes(desig);
+  let region_obj = regions_info[desig];
   //actual modal
   let region_modal = new Modal(canvas, [[100, 100], [canvas.canvas.width-100, canvas.canvas.height-100]], "white", true, 0.7, "black");
   //close button
   let close_button = new TextButton(canvas, [[region_modal.coords[1][0]-47, region_modal.coords[0][1]+47], [[region_modal.coords[1][0]-50, region_modal.coords[0][1]+10], [region_modal.coords[1][0]-10, region_modal.coords[0][1]+50]]], "x", "34px Arial", false, "black", "#041616", false, false, true, region_modal.close);
   region_modal.members.push(close_button);
+  //section functions
+  let current_section = [];
+  function clear_current_section() {
+    canvas.components = canvas.components.filter(function (item) {
+      return !current_section.includes(item);
+    });
+    current_section = [];
+  }
+  function switch_to_overview() {
+    clear_current_section();
+    //
+  }
+  function switch_to_construct() {
+    clear_current_section();
+    //
+  }
+  function switch_to_taxes() {
+    clear_current_section();
+    //residence tax only, land tax is set on a national level
+    //land is based on buildings and province
+    //residence is based on citizens and merchants
+    let r_tax_header = new Text(canvas, [345, 240], "Residence Tax", "26px Arial", "black", false, false, undefined)
+    let r_tax_slider = new Slider(canvas, [[350, 275], [canvas.canvas.width-200, 275]], ["0", "1", "2", "3", "4", "5"], String(region_obj.residence_tax), "gray", "black", "12px Arial", function(new_value) {
+      region_obj.residence_tax = Number(new_value);
+    });
+    current_section.push(r_tax_slider);
+    region_modal.members.push(r_tax_slider);
+    current_section.push(r_tax_header);
+    region_modal.members.push(r_tax_header);
+  }
+  function switch_to_units() {
+    clear_current_section();
+    //
+  }
   //region name? number designation maybe?
   //todo: add names when nnom finishes them
   let name = new Text(canvas, [750, 150], "(ID: "+desig+")", "35px Arial", "gray", false, 100, undefined);
@@ -1868,8 +2026,8 @@ function game_scene() {
   new TextButton(canvas, [[0, 0], [[675, 535], [697, 560]]], false, false, "rgba(255, 255, 255, 0)", undefined, undefined, false, false, false, game_pause_button);
   //
   //wealth and supply counters
-  new Text(canvas, [930, 612], String(self_nation.supply), "25px Arial", "black", undefined, 90, undefined);
-  new Text(canvas, [1054, 612], String(self_nation.wealth), "25px Arial", "black", undefined, 90, undefined);
+  new Text(canvas, [930, 612], String(self_nation.supply), "25px Arial", "black", undefined, 90, "supply-counter");
+  new Text(canvas, [1054, 612], String(self_nation.wealth), "25px Arial", "black", undefined, 90, "wealth-counter");
   //starting building
   new Building(canvas, window.starting_region, "settlement");
 }
@@ -1890,9 +2048,7 @@ function set_nation(name_input, slogan_input, color_input) {
     "name": "Capital",
     "type": "settlement",
     "upgrades": {},
-    "homes": {
-      "citizens": 3
-    }
+    "homes": [make_citizen(window.starting_region, "settlement"), make_citizen(window.starting_region, "settlement"), make_citizen(window.starting_region, "settlement")]
   });
 }
 
