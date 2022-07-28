@@ -81,7 +81,12 @@ let sea_info = {
   "S7": {
     "coords": [[819,244],[863,273],[888,280],[922,280],[966,269],[953,280],[929,296],[914,331],[920,370],[929,404],[927,441],[915,480],[883,510],[832,523],[779,515],[723,491],[679,446],[653,392],[618,317],[613,276],[610,235],[621,187],[644,161],[674,145],[714,140],[762,169],[806,223],[816,239],[744,251],[734,245],[719,246],[712,233],[710,228],[705,207],[680,200],[667,208],[662,222],[650,230],[639,231],[636,233],[648,259],[663,286],[642,288],[635,293],[638,306],[654,311],[683,306],[710,302],[715,287],[746,276],[752,264],[745,251],[774,258],[762,270],[753,286],[775,300],[795,303],[724,350],[716,349],[702,358],[692,366],[698,386],[712,395],[728,393],[735,371],[751,378],[746,386],[760,390],[773,394],[782,405],[797,412],[814,444],[838,459],[843,464],[860,466],[885,460],[889,447],[886,426],[898,420],[898,409],[881,399],[871,395],[857,386],[852,363],[838,344],[831,321],[823,317],[819,330],[816,362],[808,372],[798,370],[780,366],[757,370],[750,377],[733,370],[724,352],[796,302],[805,302],[809,290],[805,286],[805,275],[807,266],[799,258],[785,256],[772,260],[745,251],[816,239]],
     "neighbors": ["S2", "S6", "S8", "S15", "S16", "S17", "5", "6"]
-  }
+  },
+  //skip a few
+  /*"S38": {
+    "coords": [[2112,2868],[2132,2816],[2140,2780],[2132,2724],[2128,2684],[2144,2680],[2156,2652],[2164,2648],[2192,2640],[2216,2628],[2236,2616],[2256,2568],[2276,2520],[2316,2452],[2340,2388],[2352,2384],[2364,2388],[2380,2404],[2388,2436],[2360,2500],[2352,2508],[2344,2528],[2304,2560],[2296,2572],[2296,2600],[2296,2608],[2272,2620],[2260,2644],[2248,2656],[2228,2668],[2208,2688],[2212,2704],[2224,2708],[2252,2712],[2256,2716],[2256,2724],[2252,2736],[2240,2756],[2240,2764],[2248,2772],[2272,2768],[2292,2760],[2296,2760],[2300,2764],[2300,2772],[2304,2784],[2304,2808],[2300,2828],[2228,2860],[2184,2864],[2124,2868],[2116,2872],[2116,2872],[2116,2872]],
+    "neighbors": ["S37", "S39", "S43", "81", "86", "89", "90"]
+  }*/
 };
 
 //1 region makes 1 wealth per 30 days?
@@ -696,6 +701,7 @@ class Canvas {
     this.scroll_temp_disabled = true;
     this.keydown_temp_disabled = true;
     this.click_temp_disabled = false;
+    this.touchmove_temp_disabled = true;
   }
   update() {
     this.frame += 1;
@@ -964,6 +970,7 @@ class Modal {
     this.canvas.scroll_temp_disabled = true;
     this.canvas.keydown_temp_disabled = true;
     this.canvas.click_temp_disabled = true;
+    this.canvas.touchmove_temp_disabled = true;
     //[[x, y], [x, y]]
     this.coords = coords;
     this.color = color;
@@ -981,6 +988,7 @@ class Modal {
     this.canvas.scroll_temp_disabled = false;
     this.canvas.keydown_temp_disabled = false;
     this.canvas.click_temp_disabled = false;
+    this.canvas.touchmove_temp_disabled = false;
     //should also enable canvas onclick and stuff
     //remove self and members
     this.canvas.components = this.canvas.components.filter(function (item) {
@@ -1117,6 +1125,9 @@ class Building {
       this.info_objs.push(name);
       this.clicked = true;
     } else {
+      if (this.canvas.context.isPointInPath(window.game_overlay_transparent.get_path(), e.offsetX, e.offsetY)) {
+        return;
+      }
       if (this.clicked) {
         toggleOverlay();
       }
@@ -1163,6 +1174,8 @@ class SeaTile {
     this.coords = coords;
     this.desig = desig;
     this.path = undefined;
+    //color for debug purposes only
+    this.color_debug = false;
     this.canvas.components.pushOrder(this, "mapIcon");
     this.canvas.sea.push(this);
   }
@@ -1177,6 +1190,11 @@ class SeaTile {
     }
     path.lineTo(...this.coords[0]);
     this.path = path;
+    if (this.color_debug) {
+      //debug only!
+      this.canvas.context.fillStyle = "green";
+      this.canvas.context.fill(path);
+    }
     return;
   }
 }
@@ -1627,6 +1645,9 @@ let canvas = new Canvas([1200,700], "game-canvas");
 //12 fps
 //increase fps?
 
+//overlay path for game scene
+window.game_overlay_transparent = new OverlayTransparentPath([[24,541],[21,22],[1174,24],[1175,541],[870,542],[869,562],[806,563],[807,531],[664,527],[642,504],[657,473],[640,482],[642,456],[621,441],[615,430],[605,433],[606,442],[582,449],[578,469],[583,479],[569,473],[586,505],[554,531],[550,563],[355,563],[355,545]]);
+
 //requestAnimationFrame(canvas.update)
 setInterval(function() {
   canvas.update();
@@ -1652,6 +1673,10 @@ function residence_tax_payment(pay_period) {
     }
     self_nation.wealth += (o_region.residence_tax * citizens) / pay_period;
   }
+}
+
+function unit_production() {
+  //
 }
 
 function tick() {
@@ -1729,9 +1754,7 @@ function create_region_modal(desig) {
   }
   function switch_to_taxes() {
     clear_current_section();
-    //residence tax only, land tax is set on a national level
-    //land is based on buildings and province
-    //residence is based on citizens and merchants
+    //residence tax is based on citizens and merchants
     let r_tax_header = new Text(canvas, [345, 240], "Residence Tax", "26px Arial", "black", false, false, undefined)
     let r_tax_slider = new Slider(canvas, [[350, 275], [canvas.canvas.width-200, 275]], ["0", "1", "2", "3", "4", "5"], String(region_obj.residence_tax), "gray", "black", "12px Arial", function(new_value) {
       region_obj.residence_tax = Number(new_value);
@@ -1850,8 +1873,6 @@ function point_in_region(p, desig) {
   return in_region;
 }
 
-//overlay path for game scene
-let overlay_transparent = new OverlayTransparentPath([[24,541],[21,22],[1174,24],[1175,541],[870,542],[869,562],[806,563],[807,531],[664,527],[642,504],[657,473],[640,482],[642,456],[621,441],[615,430],[605,433],[606,442],[582,449],[578,469],[583,479],[569,473],[586,505],[554,531],[550,563],[355,563],[355,545]]);
 function game_scene() {
   window.gameScaleFactor = 1.5;
   window.gameTranslate = [0, 0];
@@ -1944,6 +1965,44 @@ function game_scene() {
       return value !== unpressed_key;
     });
   });
+  if (is_mobile) {
+    self.touchmove_temp_disabled = false;
+    document.addEventListener("touchstart", function(e) {
+      if (self.touchmove_temp_disabled) {
+        return;
+      }
+      if (!canvas.context.isPointInPath(window.game_overlay_transparent.get_path(), e.touches[0].clientX, e.touches[0].clientY)) {
+        return;
+      }
+      self.click_temp_disabled = true;
+      window.gameTSInfo = {
+        og_coords: [e.touches[0].clientX, e.touches[0].clientY],
+        og_translate: window.gameTranslate
+      };
+    });
+    document.addEventListener("touchmove", function(e) {
+      if (self.touchmove_temp_disabled || !window.gameTSInfo) {
+        return;
+      }
+      let x_diff = e.touches[0].clientX - window.gameTSInfo.og_coords[0];
+      let y_diff = e.touches[0].clientY - window.gameTSInfo.og_coords[1];
+      window.gameTranslate = [window.gameTSInfo.og_translate[0] - x_diff, window.gameTSInfo.og_translate[1] - y_diff];
+    });
+    document.addEventListener("touchend", function(e) {
+      if (self.touchmove_temp_disabled || !window.gameTSInfo) {
+        return;
+      }
+      self.click_temp_disabled = false;
+      window.gameTSInfo = undefined;
+    });
+    document.addEventListener("touchcancel", function(e) {
+      if (self.touchmove_temp_disabled || !window.gameTSInfo) {
+        return;
+      }
+      self.click_temp_disabled = false;
+      window.gameTSInfo = undefined;
+    });
+  }
   //set up game scene
   let nnommap = new MovingBackground(canvas, "/images/nnommap_big.png", background_map);
   nnommap.crop = true;
@@ -1958,7 +2017,7 @@ function game_scene() {
       if (self.canvas.click_temp_disabled) {
         return;
       }
-      if (canvas.context.isPointInPath(overlay_transparent.get_path(), e.offsetX, e.offsetY)) {
+      if (canvas.context.isPointInPath(window.game_overlay_transparent.get_path(), e.offsetX, e.offsetY)) {
         //inside the view window, not on the overlay. ok to click
         let in_region = point_in_region([e.offsetX, e.offsetY], self.desig);
         if (in_region) {
@@ -1978,7 +2037,7 @@ function game_scene() {
         return;
       }
       //inside the view window, not on the overlay. ok to click
-      if (canvas.context.isPointInPath(overlay_transparent.get_path(), e.offsetX, e.offsetY)) {
+      if (canvas.context.isPointInPath(window.game_overlay_transparent.get_path(), e.offsetX, e.offsetY)) {
         if (canvas.context.isPointInPath(self.path, e.offsetX, e.offsetY)) {
           //make sure its not in neighbors
           /*
