@@ -22,14 +22,17 @@ const buildings_info = {
       "wealth": 25,
       "supply": 75
     },
-    //maintenance is in supply
-    "mt": 5,
+    //maintenance is in supply (unimplemented)
+    "mt": 0,
     //homes for units
     "ho": 3,
     //duration of how long it takes to construct (in ticks) [which are days])
     "dur": 50,
     //pay period is how long it takes for the resources are produced, and maintenance paid)
     "per": 150,
+    //workers required. if greater than 0, workers must be assigned to work on it
+    //if greater than 0, actual production = production*((number of workers)/(workers)) rounded down
+    "wor": 0,
     //production of resources
     "pr": {
       //citizens
@@ -42,8 +45,7 @@ const buildings_info = {
       //province wealth, happiness probably
     },
     //enables production of the units
-    "en": {
-    },
+    "en": {},
     "img": "/images/buildings/settlement.png"
   }
 };
@@ -795,6 +797,7 @@ class TextButton {
     this.display = true;
     this.set_cursor = false;
     let self = this;
+    this.click_unwrapped = onclick;
     this.click = function(e) {
       //check if within coords
       if ((e.offsetX > self.coords[1][0][0] && e.offsetX < self.coords[1][1][0]) && (e.offsetY > self.coords[1][0][1] && e.offsetY < self.coords[1][1][1])) {
@@ -1125,7 +1128,7 @@ class Building {
       this.info_objs.push(name);
       this.clicked = true;
     } else {
-      if (this.canvas.context.isPointInPath(window.game_overlay_transparent.get_path(), e.offsetX, e.offsetY)) {
+      if (!this.canvas.context.isPointInPath(window.game_overlay_transparent.get_path(), e.offsetX, e.offsetY)) {
         return;
       }
       if (this.clicked) {
@@ -1676,7 +1679,25 @@ function residence_tax_payment(pay_period) {
 }
 
 function unit_production() {
-  //
+  for (let i=0; i < self_nation.owned_regions.length; i++) {
+    let o_region = regions_info[self_nation.owned_regions[i]];
+    for (let j=0; j < o_region.buildings.length; j++) {
+      let o_building = o_region.buildings[j];
+      let o_b_info = buildings_info[o_building.type];
+      if (o_building.last_prod+o_b_info.per < window.ticks) {
+        o_region.buildings[j].last_prod = window.ticks;
+        if (o_b_info.pr.ci > 0) {
+          //check homes and make sure not full already
+          if (o_building.homes.length < o_b_info.ho) {
+            o_region.buildings[j].homes.push(make_citizen(self_nation.owned_regions[i], "settlement"));
+          }
+        }
+        if (o_b_info.pr.su > 0) {
+          self_nation.supply += o_b_info.pr.su;
+        }
+      }
+    }
+  }
 }
 
 function tick() {
@@ -1686,6 +1707,7 @@ function tick() {
   window.ticks++;
   //tax payments every season change
   residence_tax_payment(60);
+  unit_production();
   canvas.canvas.dispatchEvent(new CustomEvent("customtextchange", {detail: {"wealth-counter": Math.floor(self_nation.wealth)}}));
   canvas.canvas.dispatchEvent(new CustomEvent("customtextchange", {detail: {"supply-counter": self_nation.supply}}));
   let years = Math.floor(window.ticks/360);
@@ -1728,7 +1750,11 @@ function normal_speed_button() {
   window.tick_interval_id = setInterval(tick, 667);
 }
 
-function create_region_modal(desig) {
+//options is an optional dict with "goto" (section to jump to) and maybe "filter" (filter for units)
+/**
+ * @param {string} desig
+ */
+function create_region_modal(desig, options) {
   let player_owned_region = self_nation.owned_regions.includes(desig);
   let region_obj = regions_info[desig];
   //actual modal
@@ -1745,10 +1771,14 @@ function create_region_modal(desig) {
     current_section = [];
   }
   function switch_to_overview() {
+    //owner, neighbors (with "link"?)
+    //supply, wealth
+    //resources
     clear_current_section();
     //
   }
   function switch_to_construct() {
+    //buildings
     clear_current_section();
     //
   }
@@ -1765,6 +1795,7 @@ function create_region_modal(desig) {
     region_modal.members.push(r_tax_header);
   }
   function switch_to_units() {
+    //units
     clear_current_section();
     //
   }
@@ -1838,11 +1869,28 @@ function create_region_modal(desig) {
   }
   region_modal.members.push(units);
   canvas.addEvent("customsectionchange", [overview, units], false);
-  //owner, neighbors (with "link"?)
-  //supply, wealth
-  //units
-  //buildings
-  //resources
+  if (options) {
+    switch (options.goto) {
+      case "overview":
+        overview.click_unwrapped();
+        break;
+      case "construct":
+        if (construct) {
+          construct.click_unwrapped();
+        }
+        break;
+      case "taxes":
+        if (taxes) {
+          taxes.click_unwrapped();
+        }
+        break;
+      case "units":
+        units.click_unwrapped();
+        break;
+      default:
+        break;
+    }
+  }
 }
 
 function create_sea_modal(desig) {
@@ -1930,28 +1978,33 @@ function game_scene() {
       window.gamePressedKeys.push(e.key);
     }
     //if up, down, left, right
-    function movement_handling(key) {
-      switch (key) {
+    function movement_handling(e) {
+      let move_change = 3;
+      if (e.shiftKey) {
+        //make it go faster when shift held down
+        move_change = 5;
+      }
+      switch (e.key.toLowerCase()) {
         case "w":
-        case "ArrowUp":
-          window.gameTranslate[1] -= 3;
+        case "arrowup":
+          window.gameTranslate[1] -= move_change;
           break;
         case "s":
-        case "ArrowDown":
-          window.gameTranslate[1] += 3;
+        case "arrowdown":
+          window.gameTranslate[1] += move_change;
           break;
         case "a":
-        case "ArrowLeft":
-          window.gameTranslate[0] -= 3;
+        case "arrowleft":
+          window.gameTranslate[0] -= move_change;
           break;
         case "d":
-        case "ArrowRight":
-          window.gameTranslate[0] += 3;
+        case "arrowright":
+          window.gameTranslate[0] += move_change;
           break;
         default: break;
       }
     }
-    movement_handling(e.key);
+    movement_handling(e);
     let directional_keys = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"];
     for (let i=0; i < directional_keys.length; i++) {
       if (directional_keys[i] !== e.key && window.gamePressedKeys.includes(directional_keys[i])) {
@@ -2107,6 +2160,7 @@ function set_nation(name_input, slogan_input, color_input) {
     "name": "Capital",
     "type": "settlement",
     "upgrades": {},
+    "last_prod": 0,
     "homes": [make_citizen(window.starting_region, "settlement"), make_citizen(window.starting_region, "settlement"), make_citizen(window.starting_region, "settlement")]
   });
 }
@@ -2252,7 +2306,8 @@ function help_scene() {
   const help_info = [
     {"title": "Welcome!", "content": "Muskets and Bayonets is a real time grand strategy game set in the early gunpowder era."},
     {"title": "Nation Selection", "content": "Click 'Play', and click a region to start in. Then, enter in name, slogan, and color."},
-    {"title": "Map Controls", "content": "Arrow keys (left, right, up, down) moves the map. Scroll wheel zooms the map in and out."}
+    {"title": "Mobile Support", "content": "Very good mobile support is offered. Clicking, inputting, and dragging to move all work."},
+    {"title": "Map Controls", "content": "Arrow keys or WASD moves the map. Scroll wheel zooms the map in and out."}
   ];
   canvas.reset();
   //back button
