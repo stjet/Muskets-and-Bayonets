@@ -590,6 +590,7 @@ let self_nation = {
   land_tax: 2,
   wealth: 0,
   supply: 0,
+  happiness: 0,
   owned_regions: []
 };
 
@@ -1075,14 +1076,23 @@ game_overlay.src = "/images/nnom_overlay.png";
 let game_overlay2 = new Image();
 game_overlay2.src = "/images/nnom_overlay2.png";
 
+let overlay2_objects = [];
 function toggleOverlay() {
   //toggles between 9 button overlay and info panel overlay (difference is in lower left corner)
   if (window.gameOverlayObject.image_url === "/images/nnom_overlay.png") {
     window.gameOverlayObject.image_url = "/images/nnom_overlay2.png";
     window.gameOverlayObject.image = game_overlay2;
+    //overlay2_objects
+    let happiness_display = new Text(canvas, [232, 685], "Happiness: "+String(self_nation.happiness)+"%", "17px Arial", "black", false, 90, "happiness-display");
+    overlay2_objects.push(happiness_display);
   } else if (window.gameOverlayObject.image_url === "/images/nnom_overlay2.png") {
     window.gameOverlayObject.image_url = "/images/nnom_overlay.png";
     window.gameOverlayObject.image = game_overlay;
+    //get rid of overlay2 objects
+    canvas.components = canvas.components.filter(function(item) {
+      return !overlay2_objects.includes(item);
+    });
+    overlay2_objects = [];
   }
 }
 
@@ -1664,6 +1674,57 @@ affinity_start_background.src = "/images/modified_affinity_screen.png";
 let transparent_selection_map = new Image();
 transparent_selection_map.src = "/images/transparent_selection_map.png";
 
+function calculate_happiness() {
+  let calculated_happiness = 50;
+  for (let i=0; i < self_nation.owned_regions.length; i++) {
+    let o_region = regions_info[self_nation.owned_regions[i]];
+    let citizens = 0;
+    for (let j=0; j < o_region.buildings.length; j++) {
+      let o_building = o_region.buildings[j];
+      if (buildings_info[o_building.type].ef.hap) {
+        //if building has a special effect on happiness (negative or positive)
+        calculated_happiness += buildings_info[o_building.type].ef.hap;
+      }
+      citizens += o_building.homes.filter(function (item) {
+        return item.name === "citizen";
+      }).length;
+    }
+    //+1 happiness
+    calculated_happiness += citizens;
+    //tax rate
+    switch (o_region.residence_tax) {
+      case 0:
+        //no effect on happiness
+        break;
+      case 1:
+        calculated_happiness -= 1;
+        break;
+      case 2:
+        calculated_happiness -= 3;
+        break;
+      case 3:
+        calculated_happiness -= 6;
+        break;
+      case 4:
+        calculated_happiness -= 12;
+        break;
+      case 5:
+        calculated_happiness -= 20;
+        break;
+      default:
+        break;
+    }
+  }
+  //it is a percentage so it cannot go below or above certain levels
+  if (calculated_happiness > 100) {
+    calculated_happiness = 100;
+  } else if (calculated_happiness < 0) {
+    calculated_happiness = 0;
+  }
+  self_nation.happiness = calculated_happiness;
+  canvas.canvas.dispatchEvent(new CustomEvent("customtextchange", {detail: {"happiness-display": "Happiness: "+String(self_nation.happiness)+"%"}}));
+}
+
 function residence_tax_payment(pay_period) {
   for (let i=0; i < self_nation.owned_regions.length; i++) {
     let o_region = regions_info[self_nation.owned_regions[i]];
@@ -1708,6 +1769,9 @@ function tick() {
   //tax payments every season change
   residence_tax_payment(60);
   unit_production();
+  if (window.ticks%5 === 0) {
+    calculate_happiness();
+  }
   canvas.canvas.dispatchEvent(new CustomEvent("customtextchange", {detail: {"wealth-counter": Math.floor(self_nation.wealth)}}));
   canvas.canvas.dispatchEvent(new CustomEvent("customtextchange", {detail: {"supply-counter": self_nation.supply}}));
   let years = Math.floor(window.ticks/360);
@@ -2142,6 +2206,8 @@ function game_scene() {
   new Text(canvas, [1054, 612], String(self_nation.wealth), "25px Arial", "black", undefined, 90, "wealth-counter");
   //starting building
   new Building(canvas, window.starting_region, "settlement");
+  let happiness_display = new Text(canvas, [232, 685], "Happiness: 50%", "17px Arial", "black", false, 90, "happiness-display");
+  overlay2_objects.push(happiness_display);
 }
 
 /**
