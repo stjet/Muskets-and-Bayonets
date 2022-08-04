@@ -751,6 +751,7 @@ class Canvas {
       //add components to the event separately
       let self = this;
       function canvasEventHandler(e) {
+        self.clearDeadEvents();
         let event_items = self.events[event];
         if (!event_items) {
           return;
@@ -764,6 +765,19 @@ class Canvas {
       this.event_functions[event] = canvasEventHandler;
     } else {
       this.events[event] = objects;
+    }
+  }
+  //when components no longer exist, get rid of the events for them too
+  clearDeadEvents() {
+    for (let i=0; i < Object.keys(this.events).length; i++) {
+      let event_name = Object.keys(this.events)[i];
+      for (let j=0; j < this.events[event_name].length; j++) {
+        let obj = this.events[event_name][j];
+        //if component no longer exists
+        if (!this.components.includes(obj)) {
+          this.events[event_name].splice(j, 1);
+        }
+      }
     }
   }
 }
@@ -1348,6 +1362,9 @@ class Text {
     if (!this.display) {
       return;
     }
+    if (!this.text) {
+      return;
+    }
     this.canvas.context.font = this.text_info;
     //eg: shadow-white
     if (this.stroke_color) {
@@ -1642,6 +1659,19 @@ class Slider {
   }
 }
 
+//construction card for build menu
+class ConstructionCard {
+  /**
+   * @param {Canvas} canvas
+   */
+  constructor(canvas, coords) {
+    this.canvas = canvas;
+    //[[top left corner], width, height]
+    this.coords = coords;
+    //
+  }
+}
+
 //shorthand functions for unit objects
 function make_citizen(desig, building_name) {
   return {
@@ -1766,8 +1796,8 @@ function tick() {
   //update time
   //apparently js ints are accurate up to 15 digits, so with 1 tick a second, should not overflow or be inaccurate
   window.ticks++;
-  //tax payments every season change
-  residence_tax_payment(60);
+  //tax payments every season
+  residence_tax_payment(90);
   unit_production();
   if (window.ticks%5 === 0) {
     calculate_happiness();
@@ -1832,6 +1862,9 @@ function create_region_modal(desig, options) {
     canvas.components = canvas.components.filter(function (item) {
       return !current_section.includes(item);
     });
+    region_modal.members = region_modal.members.filter(function (item) {
+      return !current_section.includes(item);
+    });
     current_section = [];
   }
   function switch_to_overview() {
@@ -1849,14 +1882,26 @@ function create_region_modal(desig, options) {
   function switch_to_taxes() {
     clear_current_section();
     //residence tax is based on citizens and merchants
-    let r_tax_header = new Text(canvas, [345, 240], "Residence Tax", "26px Arial", "black", false, false, undefined)
+    let r_tax_h_effect = {
+      "0": 0,
+      "1": -1,
+      "2": -3,
+      "3": -6,
+      "4": -12,
+      "5": -20
+    };
+    let r_tax_header = new Text(canvas, [345, 240], "Residence Tax", "26px Arial", "black", false, false, undefined);
+    current_section.push(r_tax_header);
+    region_modal.members.push(r_tax_header);
     let r_tax_slider = new Slider(canvas, [[350, 275], [canvas.canvas.width-200, 275]], ["0", "1", "2", "3", "4", "5"], String(region_obj.residence_tax), "gray", "black", "12px Arial", function(new_value) {
       region_obj.residence_tax = Number(new_value);
+      canvas.canvas.dispatchEvent(new CustomEvent("customtextchange", {detail: {"rt-effect-text": "Effect: "+r_tax_h_effect[String(new_value)]+" happiness"}}));
     });
     current_section.push(r_tax_slider);
     region_modal.members.push(r_tax_slider);
-    current_section.push(r_tax_header);
-    region_modal.members.push(r_tax_header);
+    let rt_effect_text = new Text(canvas, [350, 325], "Effect: "+String(r_tax_h_effect[String(region_obj.residence_tax)])+" happiness", "18px Arial", "Black", false, false, "rt-effect-text");
+    current_section.push(rt_effect_text);
+    region_modal.members.push(rt_effect_text);
   }
   function switch_to_units() {
     //units
@@ -1936,20 +1981,20 @@ function create_region_modal(desig, options) {
   if (options) {
     switch (options.goto) {
       case "overview":
-        overview.click_unwrapped();
+        overview.click_unwrapped(overview);
         break;
       case "construct":
         if (construct) {
-          construct.click_unwrapped();
+          construct.click_unwrapped(construct);
         }
         break;
       case "taxes":
         if (taxes) {
-          taxes.click_unwrapped();
+          taxes.click_unwrapped(taxes);
         }
         break;
       case "units":
-        units.click_unwrapped();
+        units.click_unwrapped(units);
         break;
       default:
         break;
@@ -2010,10 +2055,9 @@ function game_scene() {
   canvas.reset();
   //enable scrolling
   canvas.scroll_temp_disabled = false;
-  let self = canvas;
   canvas.addEvent('wheel', [canvas]);
   canvas.wheel = function(e) {
-    if (self.scroll_temp_disabled) {
+    if (canvas.scroll_temp_disabled) {
       return;
     }
     //negative means up, positive means down
@@ -2031,11 +2075,11 @@ function game_scene() {
       window.gameScaleFactor = 2.5;
     }
   }
-  self.keydown_temp_disabled = false;
+  canvas.keydown_temp_disabled = false;
   //keeps track of the pressed keys
   window.gamePressedKeys = [];
   document.addEventListener("keydown", function(e) {
-    if (self.keydown_temp_disabled) {
+    if (canvas.keydown_temp_disabled) {
       return;
     }
     if (!window.gamePressedKeys.includes(e.key)) {
@@ -2083,22 +2127,22 @@ function game_scene() {
     });
   });
   if (is_mobile) {
-    self.touchmove_temp_disabled = false;
+    canvas.touchmove_temp_disabled = false;
     document.addEventListener("touchstart", function(e) {
-      if (self.touchmove_temp_disabled) {
+      if (canvas.touchmove_temp_disabled) {
         return;
       }
       if (!canvas.context.isPointInPath(window.game_overlay_transparent.get_path(), e.touches[0].clientX, e.touches[0].clientY)) {
         return;
       }
-      self.click_temp_disabled = true;
+      canvas.click_temp_disabled = true;
       window.gameTSInfo = {
         og_coords: [e.touches[0].clientX, e.touches[0].clientY],
         og_translate: window.gameTranslate
       };
     });
     document.addEventListener("touchmove", function(e) {
-      if (self.touchmove_temp_disabled || !window.gameTSInfo) {
+      if (canvas.touchmove_temp_disabled || !window.gameTSInfo) {
         return;
       }
       let x_diff = e.touches[0].clientX - window.gameTSInfo.og_coords[0];
@@ -2106,17 +2150,17 @@ function game_scene() {
       window.gameTranslate = [window.gameTSInfo.og_translate[0] - x_diff, window.gameTSInfo.og_translate[1] - y_diff];
     });
     document.addEventListener("touchend", function(e) {
-      if (self.touchmove_temp_disabled || !window.gameTSInfo) {
+      if (canvas.touchmove_temp_disabled || !window.gameTSInfo) {
         return;
       }
-      self.click_temp_disabled = false;
+      canvas.click_temp_disabled = false;
       window.gameTSInfo = undefined;
     });
     document.addEventListener("touchcancel", function(e) {
-      if (self.touchmove_temp_disabled || !window.gameTSInfo) {
+      if (canvas.touchmove_temp_disabled || !window.gameTSInfo) {
         return;
       }
-      self.click_temp_disabled = false;
+      canvas.click_temp_disabled = false;
       window.gameTSInfo = undefined;
     });
   }
@@ -2373,7 +2417,8 @@ function help_scene() {
     {"title": "Welcome!", "content": "Muskets and Bayonets is a real time grand strategy game set in the early gunpowder era."},
     {"title": "Nation Selection", "content": "Click 'Play', and click a region to start in. Then, enter in name, slogan, and color."},
     {"title": "Mobile Support", "content": "Very good mobile support is offered. Clicking, inputting, and dragging to move all work."},
-    {"title": "Map Controls", "content": "Arrow keys or WASD moves the map. Scroll wheel zooms the map in and out."}
+    {"title": "Map Controls", "content": "Arrow keys or WASD moves the map. Scroll wheel zooms the map in and out."},
+    {"title": "Residence Tax", "content": "Citizens living in a region pay the region's tax rate every 90 days (1 season).", "content2": "More citizens, more tax. Setting the tax rate too high will decrease happiness."}
   ];
   canvas.reset();
   //back button
@@ -2397,7 +2442,8 @@ function help_scene() {
   });
   //help text
   new Text(canvas, [canvas.canvas.width/2-150, 250], help_info[window.helpIndex].title, "50px Arial", "black", false, 690, "title");
-  new Text(canvas, [canvas.canvas.width/2-305, 350], help_info[window.helpIndex].content, "21px Arial", "black", false, 690, "content");
+  new Text(canvas, [canvas.canvas.width/2-330, 350], help_info[window.helpIndex].content, "21px Arial", "black", false, 690, "content");
+  new Text(canvas, [canvas.canvas.width/2-330, 377], help_info[window.helpIndex].content2, "21px Arial", "black", false, 690, "content2");
 }
 
 function credit_scene() {
