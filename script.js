@@ -46,7 +46,35 @@ const buildings_info = {
     },
     //enables production of the units
     "en": {},
-    "img": "/images/buildings/settlement.png"
+    "img": "/images/buildings/settlement.png",
+    "upgrades": ["town"],
+    "benefits": "Makes citizens and homes 3 units",
+    "description": "A small settlement just getting started."
+  },
+  "town": {
+    "co": {
+      "wealth": 50,
+      "supply": 150
+    },
+    "mt": 0,
+    "ho": 5,
+    "dur": 200,
+    "per": 100,
+    "wor": 0,
+    "pr": {
+      //citizens
+      "ci": 1,
+      //supply
+      "su": 0
+    },
+    "ef": {
+      //
+    },
+    "en": {},
+    "img": "/images/buildings/town.png",
+    "upgrades": ["city"],
+    "benefits": "Makes citizens faster and homes 5 units",
+    "description": "A bustling town growing all the time."
   }
 };
 
@@ -1114,7 +1142,18 @@ let settlementImage = new Image();
 settlementImage.src = "/images/buildings/settlement.png";
 
 let settlementImage_simp = new Image();
-settlementImage_simp.src = "/images/buildings/settlement_simp.png"
+settlementImage_simp.src = "/images/buildings/settlement_simp.png";
+
+let townImage = new Image();
+townImage.src = "/images/buildings/town.png";
+
+let townImage_simp = new Image();
+townImage_simp.src = "/images/buildings/town_simp.png";
+
+const buildingImages = {
+  settlement: settlementImage_simp,
+  town: townImage_simp
+}
 
 //just the picture of building on map, not info
 class Building {
@@ -1659,16 +1698,90 @@ class Slider {
   }
 }
 
-//construction card for build menu
+//construction card for build menu. displays building name, description+benefits, image and cost
 class ConstructionCard {
   /**
    * @param {Canvas} canvas
    */
-  constructor(canvas, coords) {
+  constructor(canvas, coords, name, image, benefits, description, cost, text_infos, background_color, border, identity) {
     this.canvas = canvas;
     //[[top left corner], width, height]
     this.coords = coords;
-    //
+    //info
+    this.image = image;
+    //text
+    this.name = name;
+    this.benefits = benefits;
+    this.description = description;
+    //{supply: int, wealth: int, duration: int}
+    this.cost = cost;
+    //[[font, color], [font, color], [font, color], [font, color]]
+    this.text_infos = text_infos;
+    //colors
+    this.background_color = background_color;
+    //[name color, benefit color, description color, cost color]
+    this.border = border;
+    //use for changing the text
+    this.identity = identity;
+    //if the building card doesnt represent any building and should be empty
+    this.nothing = false;
+    this.canvas.components.push(this);
+  }
+  update() {
+    let path = new Path2D();
+    path.moveTo(this.coords[0][0], this.coords[0][1]);
+    path.lineTo(this.coords[0][0]+this.coords[1], this.coords[0][1]);
+    path.lineTo(this.coords[0][0]+this.coords[1], this.coords[0][1]+this.coords[2]);
+    path.lineTo(this.coords[0][0], this.coords[0][1]+this.coords[2]);
+    path.lineTo(this.coords[0][0], this.coords[0][1]);
+    if (this.border) {
+      this.canvas.context.strokeStyle = this.border;
+      this.canvas.context.stroke(path);
+    }
+    if (this.background_color) {
+      this.canvas.context.fillStyle = this.background_color;
+      this.canvas.context.fill(path);
+    }
+    if (this.nothing) {
+      this.canvas.context.font = this.text_infos[0][0];
+      this.canvas.context.fillStyle = this.text_infos[0][1];
+      let middle = [this.coords[0][0]+this.coords[1]/2, this.coords[0][1]+this.coords[2]/2];
+      let name_width = this.canvas.context.measureText("Nothing here").width;
+      this.canvas.context.fillText("Nothing here", middle[0]-name_width/2, this.coords[0][1]+this.coords[2]/2);
+      return;
+    }
+    //put name in top center of box
+    this.canvas.context.font = this.text_infos[0][0];
+    this.canvas.context.fillStyle = this.text_infos[0][1];
+    let middle = [this.coords[0][0]+this.coords[1]/2, this.coords[0][1]+this.coords[2]/2];
+    let name_width = this.canvas.context.measureText(this.name).width;
+    this.canvas.context.fillText(this.name, middle[0]-name_width/2, this.coords[0][1]+25);
+    //put image below it (image should be square)
+    this.canvas.context.drawImage(this.image, this.coords[0][0]+35, this.coords[0][1]+30, this.coords[1]-70, this.coords[1]-70);
+    //benefit text
+    //condense this messed up "thing" into a variable so I dont have to see it too much
+    let text_y = this.coords[0][1]+30+(this.coords[1]-70)+5;
+    this.canvas.context.font = this.text_infos[1][0];
+    this.canvas.context.fillStyle = this.text_infos[1][1];
+    this.canvas.context.fillText(this.benefits, this.coords[0][0]+10, text_y, this.coords[2]-50);
+    //description text
+    text_y += Number(this.text_infos[1][0].split("px")[0])+1;
+    this.canvas.context.font = this.text_infos[2][0];
+    this.canvas.context.fillStyle = this.text_infos[2][1];
+    this.canvas.context.fillText(this.description, this.coords[0][0]+10, text_y, this.coords[2]-50);
+    //benefits text
+    text_y += Number(this.text_infos[2][0].split("px")[0])+1;
+    this.canvas.context.font = this.text_infos[3][0];
+    this.canvas.context.fillStyle = this.text_infos[3][1];
+    this.canvas.context.fillText("Wealth: "+String(this.cost.wealth)+", Supply: "+String(this.cost.supply)+", Build Time: "+String(this.cost.duration), this.coords[0][0]+10, text_y, this.coords[2]-50);
+  }
+  customtextchange(text_obj) {
+    if (text_obj.detail[this.identity]) {
+      this.name = text_obj.detail[this.identity].name;
+      this.benefits = text_obj.detail[this.identity].benefits;
+      this.description = text_obj.detail[this.identity].description;
+      this.cost = text_obj.detail[this.identity].cost;
+    }
   }
 }
 
@@ -1844,6 +1957,43 @@ function normal_speed_button() {
   window.tick_interval_id = setInterval(tick, 667);
 }
 
+function get_buildable_buildings(desig) {
+  let buildable = [];
+  let region_buildings = regions_info[desig].buildings;
+  for (let i=0; i < region_buildings.length; i++) {
+    let upgrades = buildings_info[region_buildings[i].type].upgrades;
+    for (let j=0; j < upgrades.length; j++) {
+      let upgradable_building = buildings_info[upgrades[j]];
+      buildable.push({
+        name: upgrades[j],
+        image: buildingImages[upgrades[j]],
+        benefits: upgradable_building.benefits,
+        description: upgradable_building.description,
+        cost: {
+          duration: upgradable_building.dur,
+          wealth: upgradable_building.co.wealth,
+          supply: upgradable_building.co.supply
+        }
+      });
+    }
+  }
+  //iterate through buildings and add the upgrades, and not built
+  //placeholder for now
+  /*return [{
+    //name, image, benefits, description, cost
+    name: "settlement",
+    image: settlementImage_simp,
+    benefits: "Homes 3 units.",
+    description: "A small settlement just getting started.",
+    cost: {
+      duration: 50,
+      wealth: 25,
+      supply: 75
+    }
+  }];*/
+  return buildable;
+}
+
 //options is an optional dict with "goto" (section to jump to) and maybe "filter" (filter for units)
 /**
  * @param {string} desig
@@ -1877,7 +2027,47 @@ function create_region_modal(desig, options) {
   function switch_to_construct() {
     //buildings
     clear_current_section();
-    //
+    let buildable_buildings = get_buildable_buildings(desig);
+    if (buildable_buildings.length === 0) {
+      //
+      return;
+    }
+    let construction_index = 0; //and construction_index+1
+    //buildable_buildings[construction_index]
+    let cc1_b = buildable_buildings[construction_index];
+    let cc1 = new ConstructionCard(canvas, [[450, 200], 230, 260], cc1_b.name, cc1_b.image, cc1_b.benefits, cc1_b.description, cc1_b.cost, [["22px Arial", "black"], ["16px Arial", "black"], ["16px Arial", "black"], ["16px Arial", "black"]], "lightblue", "black", "cc1");
+    current_section.push(cc1);
+    region_modal.members.push(cc1);
+    let cc2_b = buildable_buildings[construction_index+1];
+    let cc2;
+    if (!cc2_b) {
+      cc2 = new ConstructionCard(canvas, [[700, 200], 230, 260], undefined, undefined, undefined, undefined, undefined, [["22px Arial", "black"], ["16px Arial", "black"], ["16px Arial", "black"], ["16px Arial", "black"]], "lightblue", "black", "cc2");
+      cc2.nothing = true;
+    } else {
+      cc2 = new ConstructionCard(canvas, [[700, 200], 230, 260], cc2_b.name, cc2_b.image, cc2_b.benefits, cc2_b.description, cc2_b.cost, [["22px Arial", "black"], ["16px Arial", "black"], ["16px Arial", "black"], ["16px Arial", "black"]], "lightblue", "black", "cc2");
+    }
+    current_section.push(cc2);
+    region_modal.members.push(cc2);
+    //construct buttons
+    //"gold"
+    let buy_cc1 = new TextButton(canvas, [[550, 495], [[515, 470], [620, 505]]], "Buy", "22px Arial", "#dbbe1a", "#efe8ee", "white", true, "black", false, function(){
+      //check supply and wealth
+      //subtract supply and wealth
+      //add to construction queue
+      //
+    });
+    current_section.push(buy_cc1);
+    region_modal.members.push(buy_cc1);
+    let buy_cc2 = new TextButton(canvas, [[800, 495], [[765, 470], [870, 505]]], "Buy", "22px Arial", "#dbbe1a", "#efe8ee", "white", true, "black", false, function(){
+      //nothing should be bought if cc2 is empty... obviously
+      if (cc2.nothing) {
+        return;
+      }
+      //
+    });
+    current_section.push(buy_cc2);
+    region_modal.members.push(buy_cc2);
+    //left, right
   }
   function switch_to_taxes() {
     clear_current_section();
