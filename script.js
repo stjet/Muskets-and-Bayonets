@@ -2177,7 +2177,6 @@ function create_region_modal(desig, options) {
       }
       //subtract supply and wealth
       self_nation.wealth = self_nation.wealth - cc1_cost.wealth;
-      console.log(self_nation.supply, cc1_cost.supply)
       self_nation.supply = self_nation.supply - cc1_cost.supply;
       //add to construction queue
       let add_to_queue = {
@@ -2387,8 +2386,7 @@ function game_scene() {
   canvas.reset();
   //enable scrolling
   canvas.scroll_temp_disabled = false;
-  canvas.addEvent('wheel', [canvas]);
-  canvas.wheel = function(e) {
+  document.onwheel = function(e) {
     if (canvas.scroll_temp_disabled) {
       return;
     }
