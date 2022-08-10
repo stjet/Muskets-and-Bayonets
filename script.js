@@ -619,7 +619,8 @@ let self_nation = {
   wealth: 0,
   supply: 0,
   happiness: 0,
-  owned_regions: []
+  owned_regions: [],
+  construction: []
 };
 
 //development util functions
@@ -1150,9 +1151,16 @@ townImage.src = "/images/buildings/town.png";
 let townImage_simp = new Image();
 townImage_simp.src = "/images/buildings/town_simp.png";
 
+let cityImage = new Image();
+cityImage.src = "/images/buildings/city.png";
+
+let cityImage_simp = new Image();
+cityImage_simp.src = "/images/buildings/city_simp.png";
+
 const buildingImages = {
   settlement: settlementImage_simp,
-  town: townImage_simp
+  town: townImage_simp,
+  city: cityImage_simp
 }
 
 //just the picture of building on map, not info
@@ -1171,8 +1179,16 @@ class Building {
     if (this.living.includes(this.building_name)) {
       let avg_p = findAveragePoint(this.region_desig);
       this.coords = [[avg_p[0]-30, avg_p[1]-30], [avg_p[0]+30, avg_p[1]+30]];
-      this.buildingImage = settlementImage;
-      this.simpBuildingImage = settlementImage_simp;
+      if (this.building_name === "settlement") {
+        this.buildingImage = settlementImage;
+        this.simpBuildingImage = buildingImages.settlement;
+      } else if (this.building_name === "town") {
+        this.buildingImage = townImage;
+        this.simpBuildingImage = buildingImages.town;
+      } else if (this.building_name === "city") {
+        this.buildingImage = cityImage;
+        this.simpBuildingImage = buildingImages.city;
+      }
     }
     //onclick that adds info to bottom left panel, also stops region modal from opening.
     //maybe special cursor?
@@ -1817,6 +1833,49 @@ affinity_start_background.src = "/images/modified_affinity_screen.png";
 let transparent_selection_map = new Image();
 transparent_selection_map.src = "/images/transparent_selection_map.png";
 
+function check_construction() {
+  for (let i=0; i < self_nation.construction.length; i++) {
+    let c = self_nation.construction[i];
+    if (c.start+c.dur < window.ticks) {
+      //construction finished
+      let prev_b;
+      if (c.upgrade_of) {
+        //get rid of building this was an upgrade of
+        prev_b = regions_info[c.desig].buildings = regions_info[c.desig].buildings.filter(function(building) {
+          return building.type === c.upgrade_of && building.currently_upgrading;
+        });
+        prev_b = prev_b[0];
+        regions_info[c.desig].buildings = regions_info[c.desig].buildings.filter(function(building) {
+          return building.type !== c.upgrade_of && building.currently_upgrading;
+        });
+        //remove Building class from components
+        canvas.components = canvas.components.filter(function(item) {
+          return item.region_desig !== c.desig || item.building_name !== c.upgrade_of;
+        });
+      }
+      let b_add = {
+        name: "Unnamed "+c.type,
+        type: c.type,
+        currently_upgrading: false,
+        last_prod: 0
+      }
+      //remove last prod if not relevant
+      //add homes if relevant
+      if (["settlement", "town", "city"].includes(c.type)) {
+        b_add.homes = [];
+        //todo: transfer units if upgraded
+        if (["town", "city"].includes(c.type)) {
+          b_add.homes = prev_b.homes;
+        }
+      }
+      regions_info[c.desig].buildings.push(b_add);
+      new Building(canvas, c.desig, c.type);
+      //get rid of construction
+      self_nation.construction.splice(i, 1);
+    }
+  }
+}
+
 function calculate_happiness() {
   let calculated_happiness = 50;
   for (let i=0; i < self_nation.owned_regions.length; i++) {
@@ -1874,9 +1933,11 @@ function residence_tax_payment(pay_period) {
     let citizens = 0;
     for (let j=0; j < o_region.buildings.length; j++) {
       let o_building = o_region.buildings[j];
-      citizens += o_building.homes.filter(function (item) {
-        return item.name === "citizen";
-      }).length;
+      if (o_building.homes) {
+        citizens += o_building.homes.filter(function (item) {
+          return item.name === "citizen";
+        }).length;
+      }
     }
     self_nation.wealth += (o_region.residence_tax * citizens) / pay_period;
   }
@@ -1912,11 +1973,12 @@ function tick() {
   //tax payments every season
   residence_tax_payment(90);
   unit_production();
+  check_construction();
   if (window.ticks%5 === 0) {
     calculate_happiness();
   }
   canvas.canvas.dispatchEvent(new CustomEvent("customtextchange", {detail: {"wealth-counter": Math.floor(self_nation.wealth)}}));
-  canvas.canvas.dispatchEvent(new CustomEvent("customtextchange", {detail: {"supply-counter": self_nation.supply}}));
+  canvas.canvas.dispatchEvent(new CustomEvent("customtextchange", {detail: {"supply-counter": Math.floor(self_nation.supply)}}));
   let years = Math.floor(window.ticks/360);
   let seasons = Math.floor((window.ticks - years*360) / 90);
   let days = ((window.ticks - years*360) - seasons*90);
@@ -1964,6 +2026,7 @@ function get_buildable_buildings(desig) {
     let upgrades = buildings_info[region_buildings[i].type].upgrades;
     for (let j=0; j < upgrades.length; j++) {
       let upgradable_building = buildings_info[upgrades[j]];
+      if (!upgradable_building) continue;
       buildable.push({
         name: upgrades[j],
         image: buildingImages[upgrades[j]],
@@ -1973,7 +2036,8 @@ function get_buildable_buildings(desig) {
           duration: upgradable_building.dur,
           wealth: upgradable_building.co.wealth,
           supply: upgradable_building.co.supply
-        }
+        },
+        upgrade_of: region_buildings[i].type
       });
     }
   }
@@ -2025,17 +2089,45 @@ function create_region_modal(desig, options) {
     //
   }
   function switch_to_construct() {
+    function construct_fail(btn) {
+      let og_bc = btn.background_color;
+      btn.background_color = "red";
+      setTimeout(function() {
+        btn.background_color = og_bc;
+      }, 150);
+      setTimeout(function() {
+        btn.background_color = "red";
+      }, 300);
+      setTimeout(function() {
+        btn.background_color = og_bc;
+      }, 450);
+    }
+    function construct_success(btn) {
+      let og_bc = btn.background_color;
+      btn.background_color = "green";
+      setTimeout(function() {
+        btn.background_color = og_bc;
+      }, 200);
+    }
     //buildings
     clear_current_section();
     let buildable_buildings = get_buildable_buildings(desig);
+    /*
     if (buildable_buildings.length === 0) {
       //
       return;
     }
+    */
     let construction_index = 0; //and construction_index+1
     //buildable_buildings[construction_index]
     let cc1_b = buildable_buildings[construction_index];
-    let cc1 = new ConstructionCard(canvas, [[450, 200], 230, 260], cc1_b.name, cc1_b.image, cc1_b.benefits, cc1_b.description, cc1_b.cost, [["22px Arial", "black"], ["16px Arial", "black"], ["16px Arial", "black"], ["16px Arial", "black"]], "lightblue", "black", "cc1");
+    let cc1;
+    if (!cc1_b) {
+      cc1 = new ConstructionCard(canvas, [[450, 200], 230, 260], undefined, undefined, undefined, undefined, undefined, [["22px Arial", "black"], ["16px Arial", "black"], ["16px Arial", "black"], ["16px Arial", "black"]], "lightblue", "black", "cc1");
+      cc1.nothing = true;
+    } else {
+      cc1 = new ConstructionCard(canvas, [[450, 200], 230, 260], cc1_b.name, cc1_b.image, cc1_b.benefits, cc1_b.description, cc1_b.cost, [["22px Arial", "black"], ["16px Arial", "black"], ["16px Arial", "black"], ["16px Arial", "black"]], "lightblue", "black", "cc1");
+    }
     current_section.push(cc1);
     region_modal.members.push(cc1);
     let cc2_b = buildable_buildings[construction_index+1];
@@ -2050,15 +2142,65 @@ function create_region_modal(desig, options) {
     region_modal.members.push(cc2);
     //construct buttons
     //"gold"
-    let buy_cc1 = new TextButton(canvas, [[550, 495], [[515, 470], [620, 505]]], "Buy", "22px Arial", "#dbbe1a", "#efe8ee", "white", true, "black", false, function(){
+    let buy_cc1 = new TextButton(canvas, [[550, 495], [[500, 470], [635, 505]]], "Buy", "22px Arial", "#dbbe1a", "#efe8ee", "white", true, "black", false, function(self){
+      //nothing should be bought if cc1 is empty... obviously
+      if (cc1.nothing) {
+        return;
+      }
+      //make sure construction of this is not already happening
+      let items = self_nation.construction.filter(function(item) {
+        return item.desig === desig && item.type === cc1_b.name
+      });
+      if (items.length !== 0) {
+        //construction is already happening
+        construct_fail(self);
+        return;
+      }
+      items = region_obj.buildings.filter(function(item) {
+        return item.type === cc1_b.upgrade_of;
+      });
+      if (items.length !== 0) {
+        if (items[0].currently_upgrading) {
+          //construction is already happening
+          construct_fail(self);
+          return;
+        }
+      }
       //check supply and wealth
+      let cc1_cost = cc1.cost;
+      if (self_nation.wealth < cc1_cost.wealth) {
+        construct_fail(self);
+        return;
+      } else if (self_nation.supply < cc1_cost.supply) {
+        construct_fail(self);
+        return;
+      }
       //subtract supply and wealth
+      self_nation.wealth = self_nation.wealth - cc1_cost.wealth;
+      console.log(self_nation.supply, cc1_cost.supply)
+      self_nation.supply = self_nation.supply - cc1_cost.supply;
       //add to construction queue
-      //
+      let add_to_queue = {
+        type: cc1_b.name,
+        start: window.ticks,
+        dur: cc1_cost.duration,
+        desig: desig
+      };
+      //ternary operator
+      add_to_queue.upgrade_of = cc1_b.upgrade_of ? cc1_b.upgrade_of : false;
+      self_nation.construction.push(add_to_queue);
+      //modify current building to currently_upgrading = true
+      if (cc1_b.upgrade_of) {
+        let upgrading_index = regions_info[desig].buildings.findIndex(function (item) {
+          return item.type === cc1_b.upgrade_of;
+        });
+        region_obj.buildings[upgrading_index].currently_upgrading = true;
+      }
+      construct_success(self);
     });
     current_section.push(buy_cc1);
     region_modal.members.push(buy_cc1);
-    let buy_cc2 = new TextButton(canvas, [[800, 495], [[765, 470], [870, 505]]], "Buy", "22px Arial", "#dbbe1a", "#efe8ee", "white", true, "black", false, function(){
+    let buy_cc2 = new TextButton(canvas, [[800, 495], [[750, 470], [885, 505]]], "Buy", "22px Arial", "#dbbe1a", "#efe8ee", "white", true, "black", false, function(self){
       //nothing should be bought if cc2 is empty... obviously
       if (cc2.nothing) {
         return;
@@ -2459,8 +2601,8 @@ function set_nation(name_input, slogan_input, color_input) {
   regions_info[window.starting_region].buildings.push({
     "name": "Capital",
     "type": "settlement",
-    "upgrades": {},
     "last_prod": 0,
+    "currently_upgrading": false,
     "homes": [make_citizen(window.starting_region, "settlement"), make_citizen(window.starting_region, "settlement"), make_citizen(window.starting_region, "settlement")]
   });
 }
