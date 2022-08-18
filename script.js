@@ -72,6 +72,7 @@ const buildings_info = {
     },
     "en": {},
     "img": "/images/buildings/town.png",
+    "from": "settlement",
     "upgrades": ["city"],
     "benefits": "Makes citizens faster and homes 5 units",
     "description": "A bustling town growing all the time."
@@ -1204,6 +1205,23 @@ class Building {
       toggleOverlay();
       //valid click
       let name = new Text(this.canvas, [370, 605], this.building_name, "18px Arial", "black", false, 180, undefined);
+      //check if currently upgrading
+      let self = this;
+      let self_obj = regions_info[this.region_desig].buildings.filter(function(item) {
+        return item.type === self.building_name;
+      })[0];
+      if (self_obj.currently_upgrading) {
+        let upgrade_in_prog = self_nation.construction.filter(function(item) {
+          return item.desig == self.region_desig && item.upgrade_of === self.building_name;
+        });
+        upgrade_in_prog = upgrade_in_prog[0];
+        //find out how many days are left in construction
+        let remaining_days = upgrade_in_prog.dur-(window.ticks-upgrade_in_prog.start);
+        let upgrading1 = new Text(this.canvas, [370, 672], "Now Upgrading", "12px Arial", "black", false, 180, undefined);
+        this.info_objs.push(upgrading1);
+        let upgrading2 = new Text(this.canvas, [370, 685], String(remaining_days)+"~ Days Left", "12px Arial", "black", false, 180, undefined);
+        this.info_objs.push(upgrading2);
+      }
       this.info_objs.push(name);
       this.clicked = true;
     } else {
@@ -1403,7 +1421,8 @@ class Text {
     this.canvas.components.push(this);
   }
   customtextchange(text_obj) {
-    if (text_obj.detail[this.identity]) {
+    //if it is "0" then we should let it happen
+    if (text_obj.detail[this.identity] === undefined || text_obj.detail[this.identity] === false) {
       this.text = text_obj.detail[this.identity];
     }
   }
@@ -2177,7 +2196,7 @@ function create_region_modal(desig, options) {
       }
       //subtract supply and wealth
       self_nation.wealth = self_nation.wealth - cc1_cost.wealth;
-      self_nation.supply = self_nation.supply - cc1_cost.supply;
+      self_nation.supply -= cc1_cost.supply;
       //add to construction queue
       let add_to_queue = {
         type: cc1_b.name,
