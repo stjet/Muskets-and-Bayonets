@@ -1422,7 +1422,7 @@ class Text {
   }
   customtextchange(text_obj) {
     //if it is "0" then we should let it happen
-    if (text_obj.detail[this.identity] === undefined || text_obj.detail[this.identity] === false) {
+    if (text_obj.detail[this.identity] !== undefined && text_obj.detail[this.identity] !== false) {
       this.text = text_obj.detail[this.identity];
     }
   }
@@ -1436,7 +1436,7 @@ class Text {
     if (!this.display) {
       return;
     }
-    if (!this.text) {
+    if (this.text === undefined || this.text === false) {
       return;
     }
     this.canvas.context.font = this.text_info;
@@ -1830,6 +1830,11 @@ function make_citizen(desig, building_name) {
       building: building_name
     }
   };
+}
+
+//similar to construction card, but for units, and displays amount. not part of class, but recruiting and moving units is needed
+class UnitCard {
+  //
 }
 
 let canvas = new Canvas([1200,700], "game-canvas");
