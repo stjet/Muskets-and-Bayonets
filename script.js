@@ -1816,6 +1816,7 @@ class ConstructionCard {
       this.benefits = text_obj.detail[this.identity].benefits;
       this.description = text_obj.detail[this.identity].description;
       this.cost = text_obj.detail[this.identity].cost;
+      this.image = text_obj.detail[this.identity].image;
     }
   }
 }
@@ -2110,7 +2111,7 @@ function create_region_modal(desig, options) {
     //supply, wealth
     //resources
     clear_current_section();
-    //
+    //owner, neighbors, buildings, resources, wealth contribution, happiness contribution
   }
   function switch_to_construct() {
     function construct_fail(btn) {
@@ -2228,11 +2229,131 @@ function create_region_modal(desig, options) {
       if (cc2.nothing) {
         return;
       }
-      //
+      //make sure construction of this is not already happening
+      let items = self_nation.construction.filter(function(item) {
+        return item.desig === desig && item.type === cc2_b.name
+      });
+      if (items.length !== 0) {
+        //construction is already happening
+        construct_fail(self);
+        return;
+      }
+      items = region_obj.buildings.filter(function(item) {
+        return item.type === cc2_b.upgrade_of;
+      });
+      if (items.length !== 0) {
+        if (items[0].currently_upgrading) {
+          //construction is already happening
+          construct_fail(self);
+          return;
+        }
+      }
+      //check supply and wealth
+      let cc2_cost = cc2.cost;
+      if (self_nation.wealth < cc2_cost.wealth) {
+        construct_fail(self);
+        return;
+      } else if (self_nation.supply < cc2_cost.supply) {
+        construct_fail(self);
+        return;
+      }
+      //subtract supply and wealth
+      self_nation.wealth = self_nation.wealth - cc2_cost.wealth;
+      self_nation.supply -= cc2_cost.supply;
+      //add to construction queue
+      let add_to_queue = {
+        type: cc2_b.name,
+        start: window.ticks,
+        dur: cc2_cost.duration,
+        desig: desig
+      };
+      //ternary operator
+      add_to_queue.upgrade_of = cc2_b.upgrade_of ? cc2_b.upgrade_of : false;
+      self_nation.construction.push(add_to_queue);
+      //modify current building to currently_upgrading = true
+      if (cc2_b.upgrade_of) {
+        let upgrading_index = regions_info[desig].buildings.findIndex(function (item) {
+          return item.type === cc2_b.upgrade_of;
+        });
+        region_obj.buildings[upgrading_index].currently_upgrading = true;
+      }
+      construct_success(self);
     });
     current_section.push(buy_cc2);
     region_modal.members.push(buy_cc2);
     //left, right
+    let left_btn = new TextButton(canvas, [[400, 330], [[385, 275], [415, 340]]], "‹", "60px Arial", false, "black", "#041616", false, false, false, function() {
+      if (Object.keys(buildable_buildings).length > 2) {
+        //if 2 or less, no need for pagination
+        construction_index += 2;
+        if (construction_index > Object.keys(buildable_buildings).length-1) {
+          //loop back to 0
+          construction_index = 0;
+        }
+        //change cc1_b, cc2_b, and then emit a customtextchange to change construction card text
+        cc1_b = buildable_buildings[construction_index];
+        cc2_b = buildable_buildings[construction_index+1];
+        canvas.canvas.dispatchEvent(new CustomEvent("customtextchange", {detail: {
+          "cc1": {
+            name: cc1_b.name,
+            benefits: cc1_b.benefits,
+            description: cc1_b.description,
+            cost: cc1_b.cost,
+            image: cc1_b.image
+          }
+        }}));
+        canvas.canvas.dispatchEvent(new CustomEvent("customtextchange", {detail: {
+          "cc2": {
+            name: cc2_b.name,
+            benefits: cc2_b.benefits,
+            description: cc2_b.description,
+            cost: cc2_b.cost,
+            image: cc1_b.image
+          }
+        }}));
+      }
+    });
+    current_section.push(left_btn);
+    region_modal.members.push(left_btn);
+    let right_btn = new TextButton(canvas, [[955, 330], [[940, 275], [970, 340]]], "›", "60px Arial", false, "black", "#041616", false, false, false, function() {
+      if (Object.keys(buildable_buildings).length > 2) {
+        //if 2 or less, no need for pagination
+        construction_index -= 2;
+        if (construction_index < 0) {
+          //loop forward to end
+          if (Object.keys(buildable_buildings).length%2 === 0) {
+            //even
+            construction_index = Object.keys(buildable_buildings).length-2;
+          } else {
+            //odd
+            construction_index = Object.keys(buildable_buildings).length-1;
+          }
+        }
+        //change cc1_b, cc2_b, and then emit a customtextchange to change construction card text
+        cc1_b = buildable_buildings[construction_index];
+        cc2_b = buildable_buildings[construction_index+1];
+        canvas.canvas.dispatchEvent(new CustomEvent("customtextchange", {detail: {
+          "cc1": {
+            name: cc1_b.name,
+            benefits: cc1_b.benefits,
+            description: cc1_b.description,
+            cost: cc1_b.cost,
+            image: cc1_b.image
+          }
+        }}));
+        canvas.canvas.dispatchEvent(new CustomEvent("customtextchange", {detail: {
+          "cc2": {
+            name: cc2_b.name,
+            benefits: cc2_b.benefits,
+            description: cc2_b.description,
+            cost: cc2_b.cost,
+            image: cc1_b.image
+          }
+        }}));
+      }
+    });
+    current_section.push(right_btn);
+    region_modal.members.push(right_btn);
   }
   function switch_to_taxes() {
     clear_current_section();
@@ -2768,11 +2889,12 @@ function start_scene() {
 
 function help_scene() {
   const help_info = [
-    {"title": "Welcome!", "content": "Muskets and Bayonets is a real time grand strategy game set in the early gunpowder era."},
-    {"title": "Nation Selection", "content": "Click 'Play', and click a region to start in. Then, enter in name, slogan, and color."},
-    {"title": "Mobile Support", "content": "Very good mobile support is offered. Clicking, inputting, and dragging to move all work."},
-    {"title": "Map Controls", "content": "Arrow keys or WASD moves the map. Scroll wheel zooms the map in and out."},
-    {"title": "Residence Tax", "content": "Citizens living in a region pay the region's tax rate every 90 days (1 season).", "content2": "More citizens, more tax. Setting the tax rate too high will decrease happiness."}
+    {"title": "Welcome!", "content": "Muskets and Bayonets is a real time grand strategy game set in the early gunpowder era.", "content2": ""},
+    {"title": "Nation Selection", "content": "Click 'Play', and click a region to start in. Then, enter in name, slogan, and color.", "content2": ""},
+    {"title": "Mobile Support", "content": "Very good mobile support is offered. Clicking, inputting, and dragging to move all work.", "content2": ""},
+    {"title": "Map Controls", "content": "Arrow keys or WASD moves the map. Scroll wheel zooms the map in and out.", "content2": ""},
+    {"title": "Residence Tax", "content": "Citizens living in a region pay the region's tax rate every 90 days (1 season).", "content2": "More citizens, more tax. Setting the tax rate too high will decrease happiness."},
+    {"title": "Happiness", "content": "Many factors can affect happiness. Happiness can result in benefits and positive events,", "content2": "or detriments and negative events."}
   ];
   canvas.reset();
   //back button
