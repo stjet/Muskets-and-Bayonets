@@ -1222,6 +1222,11 @@ class Building {
         let upgrading2 = new Text(this.canvas, [370, 685], String(remaining_days)+"~ Days Left", "12px Arial", "black", false, 180, undefined);
         this.info_objs.push(upgrading2);
       }
+      if (this.living.includes(this.building_name)) {
+        let housed_units_num = self_obj.homes.length;
+        let housed_text = new Text(this.canvas, [370, 627], "Housing: "+String(housed_units_num), "12px Arial", "black", false, 180, undefined);
+        this.info_objs.push(housed_text);
+      }
       this.info_objs.push(name);
       this.clicked = true;
     } else {
@@ -1237,6 +1242,7 @@ class Building {
       this.canvas.components = this.canvas.components.filter(function(value) {
         return !self.info_objs.includes(value);
       });
+      this.info_objs = [];
     }
   }
   update() {
@@ -1873,6 +1879,18 @@ function check_construction() {
         regions_info[c.desig].buildings = regions_info[c.desig].buildings.filter(function(building) {
           return building.type !== c.upgrade_of && building.currently_upgrading;
         });
+        //get rid of building info text, if any
+        //first find the component, to get the list of components that are building info text
+        prev_b_component = canvas.components.filter(function(item) {
+          return item.region_desig === c.desig && item.building_name === c.upgrade_of;
+        });
+        prev_b_component = prev_b_component[0];
+        //dont bother removing the info text components if there are none, obviously
+        if (prev_b_component.info_objs.length > 0) {
+          canvas.components = canvas.components.filter(function(value) {
+            return !prev_b_component.info_objs.includes(value);
+          });
+        }
         //remove Building class from components
         canvas.components = canvas.components.filter(function(item) {
           return item.region_desig !== c.desig || item.building_name !== c.upgrade_of;
@@ -2107,11 +2125,17 @@ function create_region_modal(desig, options) {
     current_section = [];
   }
   function switch_to_overview() {
-    //owner, neighbors (with "link"?)
-    //supply, wealth
-    //resources
     clear_current_section();
-    //owner, neighbors, buildings, resources, wealth contribution, happiness contribution
+    let r_info = regions_info[desig];
+    //owner, neighbors (with "link"?)
+    if (self_nation.owned_regions.includes(desig)) {
+      //
+    }
+    //r_info.neighbors
+    //supply, wealth, happiness contribution
+    //resources
+    //buildings
+    //amount of citizens?
   }
   function switch_to_construct() {
     function construct_fail(btn) {
@@ -2359,7 +2383,7 @@ function create_region_modal(desig, options) {
     clear_current_section();
     //residence tax is based on citizens and merchants
     let r_tax_h_effect = {
-      "0": 0,
+      "0": "-0",
       "1": -1,
       "2": -3,
       "3": -6,
