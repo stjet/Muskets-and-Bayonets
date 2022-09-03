@@ -1827,8 +1827,17 @@ class ConstructionCard {
   }
 }
 
+function add_to_units(desig, unit_name) {
+  if (regions_info[desig].units[unit_name]) {
+    regions_info[desig].units[unit_name] = 1;
+  } else {
+    regions_info[desig].units[unit_name] += 1;
+  }
+}
+
 //shorthand functions for unit objects
 function make_citizen(desig, building_name) {
+  add_to_units(desig, "citizen");
   return {
     name: "citizen",
     task: false,
@@ -2008,6 +2017,87 @@ function unit_production() {
   }
 }
 
+function calculate_happiness_contribution(desig) {
+  let contrib = 0;
+  let o_region = regions_info[desig];
+  let citizens = 0;
+  for (let j=0; j < o_region.buildings.length; j++) {
+    let o_building = o_region.buildings[j];
+    if (buildings_info[o_building.type].ef.hap) {
+      //if building has a special effect on happiness (negative or positive)
+      contrib += buildings_info[o_building.type].ef.hap;
+    }
+    citizens += o_building.homes.filter(function (item) {
+      return item.name === "citizen";
+    }).length;
+  }
+  //+1 happiness for each citizen
+  contrib += citizens;
+  //tax rate also affects happiness
+  switch (o_region.residence_tax) {
+    case 0:
+      //no effect on happiness
+      break;
+    case 1:
+      contrib -= 1;
+      break;
+    case 2:
+      contrib -= 3;
+      break;
+    case 3:
+      contrib -= 6;
+      break;
+    case 4:
+      contrib -= 12;
+      break;
+    case 5:
+      contrib -= 20;
+      break;
+    default:
+      break;
+  }
+  return contrib;
+}
+
+function calculate_wealth_contribution(desig) {
+  let contrib = 0;
+  let o_region = regions_info[desig];
+  let citizens = 0;
+  for (let j=0; j < o_region.buildings.length; j++) {
+    let o_building = o_region.buildings[j];
+    if (buildings_info[o_building.type].ef.hap) {
+      //if building has a special effect on happiness (negative or positive)
+      contrib += buildings_info[o_building.type].ef.hap;
+    }
+    citizens += o_building.homes.filter(function (item) {
+      return item.name === "citizen";
+    }).length;
+  }
+  switch (o_region.residence_tax) {
+    case 0:
+      //no effect on happiness
+      break;
+    case 1:
+      contrib += 1 * citizens;
+      break;
+    case 2:
+      contrib += 2 * citizens;
+      break;
+    case 3:
+      contrib += 3 * citizens;
+      break;
+    case 4:
+      contrib += 4 * citizens;
+      break;
+    case 5:
+      contrib += 5 * citizens;
+      break;
+    default:
+      break;
+  }
+  return contrib;
+}
+
 function tick() {
   //1 second = 1 day
   //update time
@@ -2127,15 +2217,28 @@ function create_region_modal(desig, options) {
   function switch_to_overview() {
     clear_current_section();
     let r_info = regions_info[desig];
+    //new Text(canvas, coords, text, text_info, color, stroke_color, maxwidth, identity)
     //owner, neighbors (with "link"?)
     if (self_nation.owned_regions.includes(desig)) {
-      //
+      let owner_text = new Text(canvas, [325, 205], "Owner: "+self_nation.name+" (you)", "22px Arial", "black", false, 675, undefined);
+      current_section.push(owner_text);
+      region_modal.members.push(owner_text);
     }
-    //r_info.neighbors
+    //"Neighbours: "+r_info.neighbors.join(", ")
+    let owner_text = new Text(canvas, [325, 230], "Neighbours: "+r_info.neighbors.join(", "), "22px Arial", "black", false, 675, undefined);
+    current_section.push(owner_text);
+    region_modal.members.push(owner_text);
     //supply, wealth, happiness contribution
-    //resources
+    let ha_contrib = new Text(canvas, [325, 255], "Region's Net Happiness Contribution: "+String(calculate_happiness_contribution(desig)), "22px Arial", "black", false, 675, undefined);
+    current_section.push(ha_contrib);
+    region_modal.members.push(ha_contrib);
+    let we_contrib = new Text(canvas, [325, 280], "Region's Net Wealth Contribution: "+String(calculate_wealth_contribution(desig)), "22px Arial", "black", false, 675, undefined);
+    current_section.push(we_contrib);
+    region_modal.members.push(we_contrib);
+    //units
     //buildings
-    //amount of citizens?
+    //regions_info.buildings
+    //resources
   }
   function switch_to_construct() {
     function construct_fail(btn) {
@@ -2500,6 +2603,7 @@ function create_region_modal(desig, options) {
         break;
     }
   }
+  switch_to_overview();
 }
 
 function create_sea_modal(desig) {
