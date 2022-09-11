@@ -1304,6 +1304,18 @@ cityImage.src = "/images/buildings/city.png";
 let cityImage_simp = new Image();
 cityImage_simp.src = "/images/buildings/city_simp.png";
 
+let citizenImage = new Image();
+citizenImage.src = "/images/units/citizen.png";
+
+let colonistImage = new Image();
+colonistImage.src = "/images/units/colonist.png";
+
+let conscriptImage = new Image();
+conscriptImage.src = "/images/units/conscript.png";
+
+let merchantImage = new Image();
+merchantImage.src = "/images/units/merchant.png";
+
 const buildingImages = {
   settlement: settlementImage_simp,
   town: townImage_simp,
@@ -1410,7 +1422,71 @@ class Building {
   }
 }
 
-class UnitFigure {
+class UnitCard {
+  //citizen, colonist, conscript (has 16 subtypes), merchant on the province modal
+  /**
+   * @param {Canvas} canvas
+   * @param {[number[], number, number]} coords
+   * @param {string} maintype
+   * @param {string} desig
+   * @param {string} benefits
+   * @param {string} border_color
+   * @param {string[]} text_infos
+   */
+  constructor(canvas, coords, maintype, desig, border_color, text_infos) {
+    this.canvas = canvas;
+    //coords: [[x1, y1], width, height]
+    this.coords = coords;
+    this.maintype = maintype;
+    this.desig = desig;
+    this.border = border_color;
+    //[title font, description font, quantity font]
+    this.text_infos = text_infos;
+    //switch case for image
+    switch (this.maintype) {
+      case "citizen":
+        this.image = citizenImage;
+        break;
+      case "colonist":
+        this.image = colonistImage;
+        break;
+      case "conscript":
+        this.image = conscriptImage;
+        break;
+      case "merchant":
+        this.image = merchantImage;
+        break;
+      default:
+        //this should never happen
+        break;
+    }
+    this.canvas.components.push(this);
+  }
+  update() {
+    let path = new Path2D();
+    path.moveTo(this.coords[0][0], this.coords[0][1]);
+    path.lineTo(this.coords[0][0]+this.coords[1], this.coords[0][1]);
+    path.lineTo(this.coords[0][0]+this.coords[1], this.coords[0][1]+this.coords[2]);
+    path.lineTo(this.coords[0][0], this.coords[0][1]+this.coords[2]);
+    path.lineTo(this.coords[0][0], this.coords[0][1]);
+    this.canvas.context.strokeStyle = this.border;
+    this.canvas.context.stroke(path);
+    //show name, image, amount, amount of sub variants
+    let middle = [this.coords[0][0]+this.coords[1]/2, this.coords[0][1]+this.coords[2]/2];
+    this.canvas.context.fillStyle = "black";
+    //name
+    this.canvas.context.font = this.text_infos[0];
+    let name_width = this.canvas.context.measureText(this.maintype).width;
+    this.canvas.context.fillText(this.maintype, middle[0]-name_width/2, this.coords[0][1]+25);
+    //image
+    this.canvas.context.drawImage(this.image, this.coords[0][0]+15, this.coords[0][1]+15, this.coords[1]-30, this.coords[1]-30);
+    //check regions_info for amounts
+    //TODO: regions_info[desig].units
+    //action row: move, recruit (code not here, but should be done in province modal)
+  }
+}
+
+class Unit {
   //picture of unit, like barbarian hordes, or to indicate military presence in region
 }
 
@@ -1889,6 +1965,16 @@ class Slider {
 class ConstructionCard {
   /**
    * @param {Canvas} canvas
+   * @param {[number[], number, number]} coords
+   * @param {string} name
+   * @param {Image} image
+   * @param {string} benefits
+   * @param {string} description
+   * @param {{supply: number, wealth: number, duration: number}} cost
+   * @param {[string[], string[], string[], string[]]} text_infos
+   * @param {string} background_color
+   * @param {string?} border
+   * @param {string?} identity
    */
   constructor(canvas, coords, name, image, benefits, description, cost, text_infos, background_color, border, identity) {
     this.canvas = canvas;
@@ -1992,11 +2078,6 @@ function make_citizen(desig, building_name) {
       building: building_name
     }
   };
-}
-
-//similar to construction card, but for units, and displays amount. not part of class, but recruiting and moving units is needed
-class UnitCard {
-  //
 }
 
 let canvas = new Canvas([1200,700], "game-canvas");
