@@ -1430,17 +1430,17 @@ class UnitCard {
    * @param {string} maintype
    * @param {string} desig
    * @param {string} benefits
-   * @param {string} border_color
+   * @param {string} border
    * @param {string[]} text_infos
    */
-  constructor(canvas, coords, maintype, desig, border_color, text_infos) {
+  constructor(canvas, coords, maintype, desig, border, text_infos) {
     this.canvas = canvas;
     //coords: [[x1, y1], width, height]
     this.coords = coords;
     this.maintype = maintype;
     this.desig = desig;
-    this.border = border_color;
-    //[title font, description font, quantity font]
+    this.border = border;
+    //[title font, quantity/description font, subtype quantity font]
     this.text_infos = text_infos;
     //switch case for image
     switch (this.maintype) {
@@ -1481,7 +1481,38 @@ class UnitCard {
     //image
     this.canvas.context.drawImage(this.image, this.coords[0][0]+15, this.coords[0][1]+15, this.coords[1]-30, this.coords[1]-30);
     //check regions_info for amounts
-    //TODO: regions_info[desig].units
+    let quantity = 0;
+    let sub_quantities = {};
+    let maintypes_list = ["citizen", "colonist", "conscript", "merchant"];
+    let units_list = regions_info[this.desig].units;
+    for (let i=0; i < Object.keys(units_list).length; i++) {
+      let unit_name = Object.keys(units_list)[i];
+      if (unit_name === this.maintype) {
+        quantity += units_list[unit_name];
+        if (this.maintype === "conscript") {
+          sub_quantities["conscript"] = units_list[unit_name];
+        }
+      } else if (!maintypes_list.includes(this.maintype)) {
+        //then this is a subtype, so check to see if we are military
+        if (this.maintype === "conscript") {
+          quantity += units_list[unit_name];
+          sub_quantities[unit_name] = units_list[unit_name];
+        }
+      }
+    }
+    //display quantities
+    this.canvas.context.font = this.text_infos[1];
+    this.canvas.context.fillText("Amount: "+String(quantity), this.coords[0][0]+5, this.coords[0][1]+175);
+    if (this.maintype === "conscript") {
+      //display sub quantities
+      this.canvas.context.font = this.text_infos[2];
+      //sub_quantities
+      for (let i=0; i < Object.keys(sub_quantities); i++) {
+        let subunit_name = Object.keys(sub_quantities)[i];
+        let subunit_quantity = sub_quantities[subunit_name];
+        this.canvas.context.fillText(subunit_name+": "+String(sub_quantities), this.coords[0][0]+5, this.coords[0][1]+175+(i+1)*11);
+      }
+    }
     //action row: move, recruit (code not here, but should be done in province modal)
   }
 }
@@ -2061,9 +2092,9 @@ class ConstructionCard {
 
 function add_to_units(desig, unit_name) {
   if (regions_info[desig].units[unit_name]) {
-    regions_info[desig].units[unit_name] = 1;
-  } else {
     regions_info[desig].units[unit_name] += 1;
+  } else {
+    regions_info[desig].units[unit_name] = 1;
   }
 }
 
@@ -2734,8 +2765,32 @@ function create_region_modal(desig, options) {
     region_modal.members.push(rt_effect_text);
   }
   function switch_to_units() {
+    function unit_move_modal() {
+      //
+    }
+    function unit_recruit_modal() {
+      //
+    }
     //units
     clear_current_section();
+    let citizen_card = new UnitCard(canvas, [[300, 190], 180, 300], "citizen", desig, "black", ["20px Arial", "15px Arial", "10px Arial"]);
+    current_section.push(citizen_card);
+    region_modal.members.push(citizen_card);
+    let move_btn1 = new TextButton(canvas, [[327, 470], [[310, 450], [380, 480]]], "Move", "15px Arial", "#dbbe1a", "#efe8ee", "white", false, "black", false, unit_move_modal);
+    current_section.push(move_btn1);
+    region_modal.members.push(move_btn1);
+    let recruit_btn1 = new TextButton(canvas, [[411, 470], [[400, 450], [470, 480]]], "Recruit", "15px Arial", "#dbbe1a", "#efe8ee", "white", false, "black", false, unit_recruit_modal);
+    current_section.push(recruit_btn1);
+    region_modal.members.push(recruit_btn1)
+    let colonist_card = new UnitCard(canvas, [[490, 190], 180, 300], "colonist", desig, "black", ["20px Arial", "15px Arial", "10px Arial"]);
+    current_section.push(colonist_card);
+    region_modal.members.push(colonist_card);
+    let conscript_card = new UnitCard(canvas, [[680, 190], 180, 300], "conscript", desig, "black", ["20px Arial", "15px Arial", "10px Arial"]);
+    current_section.push(conscript_card);
+    region_modal.members.push(conscript_card);
+    let merchant_card = new UnitCard(canvas, [[870, 190], 180, 300], "merchant", desig, "black", ["20px Arial", "15px Arial", "10px Arial"]);
+    current_section.push(merchant_card); 
+    region_modal.members.push(merchant_card);
     //
   }
   //region name? number designation maybe?
