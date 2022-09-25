@@ -2776,12 +2776,6 @@ function create_region_modal(desig, options) {
     let citizen_card = new UnitCard(canvas, [[300, 190], 180, 300], "citizen", desig, "black", ["20px Arial", "15px Arial", "10px Arial"]);
     current_section.push(citizen_card);
     region_modal.members.push(citizen_card);
-    let move_btn1 = new TextButton(canvas, [[327, 470], [[310, 450], [380, 480]]], "Move", "15px Arial", "#dbbe1a", "#efe8ee", "white", false, "black", false, unit_move_modal);
-    current_section.push(move_btn1);
-    region_modal.members.push(move_btn1);
-    let recruit_btn1 = new TextButton(canvas, [[411, 470], [[400, 450], [470, 480]]], "Recruit", "15px Arial", "#dbbe1a", "#efe8ee", "white", false, "black", false, unit_recruit_modal);
-    current_section.push(recruit_btn1);
-    region_modal.members.push(recruit_btn1)
     let colonist_card = new UnitCard(canvas, [[490, 190], 180, 300], "colonist", desig, "black", ["20px Arial", "15px Arial", "10px Arial"]);
     current_section.push(colonist_card);
     region_modal.members.push(colonist_card);
@@ -2791,7 +2785,33 @@ function create_region_modal(desig, options) {
     let merchant_card = new UnitCard(canvas, [[870, 190], 180, 300], "merchant", desig, "black", ["20px Arial", "15px Arial", "10px Arial"]);
     current_section.push(merchant_card); 
     region_modal.members.push(merchant_card);
-    //
+    //if owned by player, display move and recruit buttons
+    if (player_owned_region) {
+      let move_btn1 = new TextButton(canvas, [[327, 470], [[310, 450], [380, 480]]], "Move", "15px Arial", "#dbbe1a", "#efe8ee", "white", false, "black", false, unit_move_modal);
+      current_section.push(move_btn1);
+      region_modal.members.push(move_btn1);
+      let recruit_btn1 = new TextButton(canvas, [[411, 470], [[400, 450], [470, 480]]], "Recruit", "15px Arial", "#dbbe1a", "#efe8ee", "white", false, "black", false, unit_recruit_modal);
+      current_section.push(recruit_btn1);
+      region_modal.members.push(recruit_btn1)
+      let move_btn2 = new TextButton(canvas, [[517, 470], [[500, 450], [570, 480]]], "Move", "15px Arial", "#dbbe1a", "#efe8ee", "white", false, "black", false, unit_move_modal);
+      current_section.push(move_btn2);
+      region_modal.members.push(move_btn2);
+      let recruit_btn2 = new TextButton(canvas, [[601, 470], [[590, 450], [660, 480]]], "Recruit", "15px Arial", "#dbbe1a", "#efe8ee", "white", false, "black", false, unit_recruit_modal);
+      current_section.push(recruit_btn2);
+      region_modal.members.push(recruit_btn2);
+      let move_btn3 = new TextButton(canvas, [[707, 470], [[690, 450], [760, 480]]], "Move", "15px Arial", "#dbbe1a", "#efe8ee", "white", false, "black", false, unit_move_modal);
+      current_section.push(move_btn3);
+      region_modal.members.push(move_btn3);
+      let recruit_btn3 = new TextButton(canvas, [[791, 470], [[780, 450], [850, 480]]], "Recruit", "15px Arial", "#dbbe1a", "#efe8ee", "white", false, "black", false, unit_recruit_modal);
+      current_section.push(recruit_btn3);
+      region_modal.members.push(recruit_btn3);
+      let move_btn4 = new TextButton(canvas, [[897, 470], [[880, 450], [950, 480]]], "Move", "15px Arial", "#dbbe1a", "#efe8ee", "white", false, "black", false, unit_move_modal);
+      current_section.push(move_btn4);
+      region_modal.members.push(move_btn4);
+      let recruit_btn4 = new TextButton(canvas, [[981, 470], [[970, 450], [1040, 480]]], "Recruit", "15px Arial", "#dbbe1a", "#efe8ee", "white", false, "black", false, unit_recruit_modal);
+      current_section.push(recruit_btn4);
+      region_modal.members.push(recruit_btn4);
+    }
   }
   //region name? number designation maybe?
   //todo: add names when nnom finishes them
@@ -3303,6 +3323,7 @@ function help_scene() {
     {"title": "Nation Selection", "content": "Click 'Play', and click a region to start in. Then, enter in name, slogan, and color.", "content2": ""},
     {"title": "Mobile Support", "content": "Very good mobile support is offered. Clicking, inputting, and dragging to move all work.", "content2": ""},
     {"title": "Map Controls", "content": "Arrow keys or WASD moves the map. Scroll wheel zooms the map in and out.", "content2": ""},
+    {"title": "Wealth", "content": "Wealth is gotten in a couple different ways.", "content2": "It is used for construction, unit upkeep and more."},
     {"title": "Residence Tax", "content": "Citizens living in a region pay the region's tax rate every 90 days (1 season).", "content2": "More citizens, more tax. Setting the tax rate too high will decrease happiness."},
     {"title": "Happiness", "content": "Many factors can affect happiness. Happiness can result in benefits and positive events,", "content2": "or detriments and negative events."}
   ];
