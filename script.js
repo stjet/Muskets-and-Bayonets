@@ -2857,8 +2857,36 @@ function create_region_modal(desig, options) {
     function unit_recruit_modal(type) {
       region_modal.close();
       //create new modal
-      //show options
+      let recruit_modal = new Modal(canvas, [[300, 150], [canvas.canvas.width-300, canvas.canvas.height-150]], "white", true, 0.7, "black");
+      //modal children
+      let close_button = new TextButton(canvas, [[recruit_modal.coords[1][0]-47, recruit_modal.coords[0][1]+47], [[recruit_modal.coords[1][0]-50, recruit_modal.coords[0][1]+10], [recruit_modal.coords[1][0]-10, recruit_modal.coords[0][1]+50]]], "x", "34px Arial", false, "black", "#041616", false, false, true, recruit_modal.close);
+      recruit_modal.members.push(close_button);
       //
+      //show options
+      let title = new Text(canvas, [325, 200], "", "27px Arial", "black", false, 400, undefined);
+      if (type === "citizen") {
+        //conscript, military subtypes to citizen, merchant, colonist to citizen
+        title.text = "Recruit Citizen";
+        //"tip: settlement chain buildings will produce citizens as long as there is avaliable housing"
+      } else if (type === "conscript") {
+        //citizen to conscript
+        title.text = "Recruit Conscript";
+        //
+      } else if (type === "merchant") {
+        //citizen to merchant
+        title.text = "Recruit Merchant";
+        //
+      } else if (type === "colonist") {
+        //citizen to colonist
+        title.text = "Recruit Colonist";
+        //
+      } else {
+        //conscript to the subtype
+        title.text = "Recruit "+type[0].toUpperCase()+type.slice(1);
+        //
+        //if ()
+      }
+      recruit_modal.members.push(title);
       //use `desig`
     }
     //units
@@ -2886,19 +2914,19 @@ function create_region_modal(desig, options) {
       let move_btn2 = new TextButton(canvas, [[517, 470], [[500, 450], [570, 480]]], "Move", "15px Arial", "#dbbe1a", "#efe8ee", "white", false, "black", false, unit_move_modal);
       current_section.push(move_btn2);
       region_modal.members.push(move_btn2);
-      let recruit_btn2 = new TextButton(canvas, [[601, 470], [[590, 450], [660, 480]]], "Recruit", "15px Arial", "#dbbe1a", "#efe8ee", "white", false, "black", false, function() {unit_recruit_modal('colonist'));
+      let recruit_btn2 = new TextButton(canvas, [[601, 470], [[590, 450], [660, 480]]], "Recruit", "15px Arial", "#dbbe1a", "#efe8ee", "white", false, "black", false, function() {unit_recruit_modal('colonist')});
       current_section.push(recruit_btn2);
       region_modal.members.push(recruit_btn2);
       let move_btn3 = new TextButton(canvas, [[707, 470], [[690, 450], [760, 480]]], "Move", "15px Arial", "#dbbe1a", "#efe8ee", "white", false, "black", false, unit_move_modal);
       current_section.push(move_btn3);
       region_modal.members.push(move_btn3);
-      let recruit_btn3 = new TextButton(canvas, [[791, 470], [[780, 450], [850, 480]]], "Recruit", "15px Arial", "#dbbe1a", "#efe8ee", "white", false, "black", false, function() {unit_recruit_modal('conscript'));
+      let recruit_btn3 = new TextButton(canvas, [[791, 470], [[780, 450], [850, 480]]], "Recruit", "15px Arial", "#dbbe1a", "#efe8ee", "white", false, "black", false, function() {unit_recruit_modal('conscript')});
       current_section.push(recruit_btn3);
       region_modal.members.push(recruit_btn3);
       let move_btn4 = new TextButton(canvas, [[897, 470], [[880, 450], [950, 480]]], "Move", "15px Arial", "#dbbe1a", "#efe8ee", "white", false, "black", false, unit_move_modal);
       current_section.push(move_btn4);
       region_modal.members.push(move_btn4);
-      let recruit_btn4 = new TextButton(canvas, [[981, 470], [[970, 450], [1040, 480]]], "Recruit", "15px Arial", "#dbbe1a", "#efe8ee", "white", false, "black", false, function() {unit_recruit_modal('merchant'));
+      let recruit_btn4 = new TextButton(canvas, [[981, 470], [[970, 450], [1040, 480]]], "Recruit", "15px Arial", "#dbbe1a", "#efe8ee", "white", false, "black", false, function() {unit_recruit_modal('merchant')});
       current_section.push(recruit_btn4);
       region_modal.members.push(recruit_btn4);
     }
