@@ -765,7 +765,8 @@ let self_nation = {
   supply: 0,
   happiness: 0,
   owned_regions: [],
-  construction: []
+  construction: [],
+  recruitment: []
 };
 
 //development util functions
@@ -1423,7 +1424,7 @@ class Building {
 }
 
 class UnitCard {
-  //citizen, colonist, conscript (has 16 subtypes), merchant on the province modal
+  //citizen, colonist, conscript (has 3 subtypes), merchant on the province modal
   /**
    * @param {Canvas} canvas
    * @param {[number[], number, number]} coords
@@ -2090,14 +2091,6 @@ class ConstructionCard {
   }
 }
 
-function add_to_units(desig, unit_name) {
-  if (regions_info[desig].units[unit_name]) {
-    regions_info[desig].units[unit_name] += 1;
-  } else {
-    regions_info[desig].units[unit_name] = 1;
-  }
-}
-
 //shorthand functions for unit objects
 function make_citizen(desig, building_name) {
   add_to_units(desig, "citizen");
@@ -2109,6 +2102,64 @@ function make_citizen(desig, building_name) {
       building: building_name
     }
   };
+}
+
+//true is success, false is failed
+//don't worry future self, subtypes should be already handled using this system
+function convert_units(desig, unit_name, into_unit_name, time) {
+  if (regions_info[desig].units[unit_name]) {
+    //remove from homes
+    let found = false;
+    let building_name;
+    for (let i=0; i < regions_info[desig].buildings.length; i++) {
+      let building = regions_info[desig].buildings[i];
+      for (let i=0; i < building.homes.length; i++) {
+        let unit = regions_info[desig].homes[i];
+        if (unit.task) {
+          continue;
+        }
+        if (unit.name === unit_name) {
+          //if (unit.)
+          found = true;
+          //get rid of it in homes
+          regions_info[desig].homes = [...regions_info[desig].homes.slice(0,i), ...regions_info[desig].homes.slice(i+1)];
+          //add a placeholder, to ensure things cannot go over capacity
+          regions_info[desig].homes.push({
+            name: "locked",
+            location: {
+              region: desig,
+              building: building.type
+            }
+          });
+          building_name = building.type;
+          console.log(desig, building.type)
+          break;
+        }
+      }
+    }
+    if (!found) {
+      return false;
+    }
+    //remove from list
+    regions_info[desig].units[unit_name] -= 1;
+    self_nation.recruitment.push({
+      desig: desig,
+      building: building_name,
+      to: into_unit_name,
+      finish: window.ticks+time
+    });
+    return true;
+  } else {
+    return false;
+  }
+}
+
+function add_to_units(desig, unit_name) {
+  if (regions_info[desig].units[unit_name]) {
+    regions_info[desig].units[unit_name] += 1;
+  } else {
+    regions_info[desig].units[unit_name] = 1;
+  }
 }
 
 let canvas = new Canvas([1200,700], "game-canvas");
@@ -2130,6 +2181,40 @@ let affinity_start_background = new Image();
 affinity_start_background.src = "/images/modified_affinity_screen.png";
 let transparent_selection_map = new Image();
 transparent_selection_map.src = "/images/transparent_selection_map.png";
+
+function check_recruitment() {
+  /*self_nation.recruitment.push({
+    desig: desig,
+    building: building_name,
+    to: into_unit_name,
+    finish: window.ticks+time,
+  });*/
+  for (let i=0; i < self_nation.recruitment.length; i++) {
+    let rec = self_nation.recruitment[i];
+    if (rec.finish <= window.ticks) {
+      for (let j=0; j < regions_info[desig].buildings.length; j++) {
+        let building = regions_info[desig].buildings[j];
+        if (building.type === rec.building) {
+          let locked_index = building.homes.findIndex(function(item) {
+            return item.name === "locked";
+          });
+          //remove locked
+          regions_info[desig].buildings[j].homes = [...building.homes.slice(0,locked_index), ...building.homes.slice(locked_index+1)];
+          //add new unit
+          if (regions_info[desig].units[rec.to]) {
+            regions_info[desig].units[rec.to] += 1;
+          } else {
+            regions_info[desig].units[rec.to] = 1;
+          }
+          //add to housing
+          if (rec.to === "citizen") {
+            regions_info[desig].buildings[j].homes.push(make_citizen(rec.desig, rec.building));
+          }
+        }
+      }
+    }
+  }
+}
 
 function check_construction() {
   for (let i=0; i < self_nation.construction.length; i++) {
@@ -2365,6 +2450,7 @@ function tick() {
   residence_tax_payment(90);
   unit_production();
   check_construction();
+  check_recruitment();
   if (window.ticks%5 === 0) {
     calculate_happiness();
   }
@@ -2768,8 +2854,12 @@ function create_region_modal(desig, options) {
     function unit_move_modal() {
       //
     }
-    function unit_recruit_modal() {
+    function unit_recruit_modal(type) {
+      region_modal.close();
+      //create new modal
+      //show options
       //
+      //use `desig`
     }
     //units
     clear_current_section();
@@ -2790,25 +2880,25 @@ function create_region_modal(desig, options) {
       let move_btn1 = new TextButton(canvas, [[327, 470], [[310, 450], [380, 480]]], "Move", "15px Arial", "#dbbe1a", "#efe8ee", "white", false, "black", false, unit_move_modal);
       current_section.push(move_btn1);
       region_modal.members.push(move_btn1);
-      let recruit_btn1 = new TextButton(canvas, [[411, 470], [[400, 450], [470, 480]]], "Recruit", "15px Arial", "#dbbe1a", "#efe8ee", "white", false, "black", false, unit_recruit_modal);
+      let recruit_btn1 = new TextButton(canvas, [[411, 470], [[400, 450], [470, 480]]], "Recruit", "15px Arial", "#dbbe1a", "#efe8ee", "white", false, "black", false, function() {unit_recruit_modal('citizen')});
       current_section.push(recruit_btn1);
       region_modal.members.push(recruit_btn1)
       let move_btn2 = new TextButton(canvas, [[517, 470], [[500, 450], [570, 480]]], "Move", "15px Arial", "#dbbe1a", "#efe8ee", "white", false, "black", false, unit_move_modal);
       current_section.push(move_btn2);
       region_modal.members.push(move_btn2);
-      let recruit_btn2 = new TextButton(canvas, [[601, 470], [[590, 450], [660, 480]]], "Recruit", "15px Arial", "#dbbe1a", "#efe8ee", "white", false, "black", false, unit_recruit_modal);
+      let recruit_btn2 = new TextButton(canvas, [[601, 470], [[590, 450], [660, 480]]], "Recruit", "15px Arial", "#dbbe1a", "#efe8ee", "white", false, "black", false, function() {unit_recruit_modal('colonist'));
       current_section.push(recruit_btn2);
       region_modal.members.push(recruit_btn2);
       let move_btn3 = new TextButton(canvas, [[707, 470], [[690, 450], [760, 480]]], "Move", "15px Arial", "#dbbe1a", "#efe8ee", "white", false, "black", false, unit_move_modal);
       current_section.push(move_btn3);
       region_modal.members.push(move_btn3);
-      let recruit_btn3 = new TextButton(canvas, [[791, 470], [[780, 450], [850, 480]]], "Recruit", "15px Arial", "#dbbe1a", "#efe8ee", "white", false, "black", false, unit_recruit_modal);
+      let recruit_btn3 = new TextButton(canvas, [[791, 470], [[780, 450], [850, 480]]], "Recruit", "15px Arial", "#dbbe1a", "#efe8ee", "white", false, "black", false, function() {unit_recruit_modal('conscript'));
       current_section.push(recruit_btn3);
       region_modal.members.push(recruit_btn3);
       let move_btn4 = new TextButton(canvas, [[897, 470], [[880, 450], [950, 480]]], "Move", "15px Arial", "#dbbe1a", "#efe8ee", "white", false, "black", false, unit_move_modal);
       current_section.push(move_btn4);
       region_modal.members.push(move_btn4);
-      let recruit_btn4 = new TextButton(canvas, [[981, 470], [[970, 450], [1040, 480]]], "Recruit", "15px Arial", "#dbbe1a", "#efe8ee", "white", false, "black", false, unit_recruit_modal);
+      let recruit_btn4 = new TextButton(canvas, [[981, 470], [[970, 450], [1040, 480]]], "Recruit", "15px Arial", "#dbbe1a", "#efe8ee", "white", false, "black", false, function() {unit_recruit_modal('merchant'));
       current_section.push(recruit_btn4);
       region_modal.members.push(recruit_btn4);
     }
