@@ -79,8 +79,19 @@ const buildings_info = {
   }
 };
 
-const unit_stats = {
-  //
+const units_info = {
+  "citizen": {
+    "convert_into": 20
+  },
+  "colonist": {
+    "convert_into": 40
+  },
+  "conscript": {
+    "convert_into": 60
+  },
+  "merchant": {
+    "convert_into": 80
+  }
 };
 
 //sea tiles
@@ -2104,6 +2115,40 @@ function make_citizen(desig, building_name) {
   };
 }
 
+function make_colonist(desig, building_name) {
+  add_to_units(desig, "colonist");
+  return {
+    name: "colonist",
+    location: {
+      region: desig,
+      building: building_name
+    }
+  };
+}
+
+function make_conscript(desig, building_name) {
+  add_to_units(desig, "conscript");
+  return {
+    name: "conscript",
+    location: {
+      region: desig,
+      building: building_name
+    }
+  };
+}
+
+function make_merchant(desig, building_name) {
+  add_to_units(desig, "merchant");
+  return {
+    name: "merchant",
+    task: false,
+    location: {
+      region: desig,
+      building: building_name
+    }
+  };
+}
+
 //true is success, false is failed
 //don't worry future self, subtypes should be already handled using this system
 function convert_units(desig, unit_name, into_unit_name, time) {
@@ -2113,8 +2158,10 @@ function convert_units(desig, unit_name, into_unit_name, time) {
     let building_name;
     for (let i=0; i < regions_info[desig].buildings.length; i++) {
       let building = regions_info[desig].buildings[i];
-      for (let i=0; i < building.homes.length; i++) {
-        let unit = regions_info[desig].homes[i];
+      if (!building.homes) continue;
+      //check all
+      for (let j=0; j < building.homes.length; j++) {
+        let unit = building.homes[i];
         if (unit.task) {
           continue;
         }
@@ -2122,9 +2169,9 @@ function convert_units(desig, unit_name, into_unit_name, time) {
           //if (unit.)
           found = true;
           //get rid of it in homes
-          regions_info[desig].homes = [...regions_info[desig].homes.slice(0,i), ...regions_info[desig].homes.slice(i+1)];
+          regions_info[desig].buildings[i].homes = [...building.homes.slice(0,j), ...building.homes.slice(j+1)];
           //add a placeholder, to ensure things cannot go over capacity
-          regions_info[desig].homes.push({
+          regions_info[desig].buildings[i].homes.push({
             name: "locked",
             location: {
               region: desig,
@@ -2132,7 +2179,6 @@ function convert_units(desig, unit_name, into_unit_name, time) {
             }
           });
           building_name = building.type;
-          console.log(desig, building.type)
           break;
         }
       }
@@ -2191,6 +2237,7 @@ function check_recruitment() {
   });*/
   for (let i=0; i < self_nation.recruitment.length; i++) {
     let rec = self_nation.recruitment[i];
+    let desig = rec.desig;
     if (rec.finish <= window.ticks) {
       for (let j=0; j < regions_info[desig].buildings.length; j++) {
         let building = regions_info[desig].buildings[j];
@@ -2200,16 +2247,19 @@ function check_recruitment() {
           });
           //remove locked
           regions_info[desig].buildings[j].homes = [...building.homes.slice(0,locked_index), ...building.homes.slice(locked_index+1)];
-          //add new unit
-          if (regions_info[desig].units[rec.to]) {
-            regions_info[desig].units[rec.to] += 1;
-          } else {
-            regions_info[desig].units[rec.to] = 1;
-          }
           //add to housing
           if (rec.to === "citizen") {
             regions_info[desig].buildings[j].homes.push(make_citizen(rec.desig, rec.building));
+          } else if (rec.to === "colonist") {
+            regions_info[desig].buildings[j].homes.push(make_colonist(rec.desig, rec.building));
+          } else if (rec.to === "conscript") {
+            regions_info[desig].buildings[j].homes.push(make_conscript(rec.desig, rec.building));
+          } else if (rec.to === "merchant") {
+            regions_info[desig].buildings[j].homes.push(make_merchant(rec.desig, rec.building));
           }
+          //remove from recruitment
+          self_nation.recruitment = [...self_nation.recruitment.slice(0,i), ...self_nation.recruitment.slice(i+1)];
+          break;
         }
       }
     }
@@ -2865,21 +2915,148 @@ function create_region_modal(desig, options) {
       //show options
       let title = new Text(canvas, [325, 200], "", "27px Arial", "black", false, 400, undefined);
       if (type === "citizen") {
-        //conscript, military subtypes to citizen, merchant, colonist to citizen
+        //conscript, merchant, colonist to citizen (military subtypes cannot be converted to citizen)
         title.text = "Recruit Citizen";
-        //"tip: settlement chain buildings will produce citizens as long as there is avaliable housing"
+        let tip = new Text(canvas, [325, 220], "tip: settlement chain buildings will produce citizens as long as there is available housing", "12px Arial", "black", false, 500, undefined);
+        recruit_modal.members.push(tip);
+        //conscript
+        let from_conscript = new TextButton(canvas, [[330, 250], [[325, 230], [490, 260]]], "Convert from Conscript", "15px Arial", "#dbbe1a", "#efe8ee", "white", false, "black", false, function(self) {
+          let success = convert_units(desig, "conscript", "citizen", units_info.citizen.convert_into);
+          if (success) {
+            let og_text = self.text;
+            self.text = "Converting...";
+            setTimeout(function() {
+              self.text = og_text;
+            }, 750);
+          } else {
+            let og_text = self.text;
+            self.color = "red";
+            self.text = "Failed!";
+            setTimeout(function() {
+              self.color = "#dbbe1a";
+              self.text = og_text;
+            }, 750);
+          }
+        });
+        recruit_modal.members.push(from_conscript);
+        let from_conscript_info = new Text(canvas, [325, 275], "Will take "+String(units_info.citizen.convert_into)+" days", "12px Arial", "black", false, 200, undefined);
+        recruit_modal.members.push(from_conscript_info);
+        //merchant
+        let from_merchant = new TextButton(canvas, [[330, 300], [[325, 280], [490, 310]]], "Convert from Merchant", "15px Arial", "#dbbe1a", "#efe8ee", "white", false, "black", false, function(self) {
+          let success = convert_units(desig, "merchant", "citizen", units_info.citizen.convert_into);
+          if (success) {
+            let og_text = self.text;
+            self.text = "Converting...";
+            setTimeout(function() {
+              self.text = og_text;
+            }, 750);
+          } else {
+            let og_text = self.text;
+            self.color = "red";
+            self.text = "Failed!";
+            setTimeout(function() {
+              self.color = "#dbbe1a";
+              self.text = og_text;
+            }, 750);
+          }
+        });
+        recruit_modal.members.push(from_merchant);
+        let from_merchant_info = new Text(canvas, [325, 325], "Will take "+String(units_info.citizen.convert_into)+" days", "12px Arial", "black", false, 200, undefined);
+        recruit_modal.members.push(from_merchant_info);
+        //colonist
+        let from_colonist = new TextButton(canvas, [[330, 350], [[325, 330], [490, 360]]], "Convert from Colonist", "15px Arial", "#dbbe1a", "#efe8ee", "white", false, "black", false, function(self) {
+          let success = convert_units(desig, "colonist", "citizen", units_info.citizen.convert_into);
+          if (success) {
+            let og_text = self.text;
+            self.text = "Converting...";
+            setTimeout(function() {
+              self.text = og_text;
+            }, 750);
+          } else {
+            let og_text = self.text;
+            self.color = "red";
+            self.text = "Failed!";
+            setTimeout(function() {
+              self.color = "#dbbe1a";
+              self.text = og_text;
+            }, 750);
+          }
+        });
+        recruit_modal.members.push(from_colonist);
+        let from_colonist_info = new Text(canvas, [325, 375], "Will take "+String(units_info.citizen.convert_into)+" days", "12px Arial", "black", false, 200, undefined);
+        recruit_modal.members.push(from_colonist_info);
       } else if (type === "conscript") {
         //citizen to conscript
         title.text = "Recruit Conscript";
-        //
+        let from_citizen = new TextButton(canvas, [[330, 250], [[325, 230], [480, 260]]], "Convert from Citizen", "15px Arial", "#dbbe1a", "#efe8ee", "white", false, "black", false, function(self) {
+          let success = convert_units(desig, "citizen", "conscript", units_info.conscript.convert_into);
+          if (success) {
+            let og_text = self.text;
+            self.text = "Converting...";
+            setTimeout(function() {
+              self.text = og_text;
+            }, 750);
+          } else {
+            let og_text = self.text;
+            self.color = "red";
+            self.text = "Failed!";
+            setTimeout(function() {
+              self.color = "#dbbe1a";
+              self.text = og_text;
+            }, 750);
+          }
+        });
+        recruit_modal.members.push(from_citizen);
+        let from_citizen_info = new Text(canvas, [325, 275], "Will take "+String(units_info.conscript.convert_into)+" days", "12px Arial", "black", false, 200, undefined);
+        recruit_modal.members.push(from_citizen_info);
       } else if (type === "merchant") {
         //citizen to merchant
         title.text = "Recruit Merchant";
-        //
+        let from_citizen = new TextButton(canvas, [[330, 250], [[325, 230], [480, 260]]], "Convert from Citizen", "15px Arial", "#dbbe1a", "#efe8ee", "white", false, "black", false, function(self) {
+          let success = convert_units(desig, "citizen", "merchant", units_info.merchant.convert_into);
+          if (success) {
+            let og_text = self.text;
+            self.text = "Converting...";
+            setTimeout(function() {
+              self.text = og_text;
+            }, 750);
+          } else {
+            let og_text = self.text;
+            self.color = "red";
+            self.text = "Failed!";
+            setTimeout(function() {
+              self.color = "#dbbe1a";
+              self.text = og_text;
+            }, 750);
+          }
+        });
+        recruit_modal.members.push(from_citizen);
+        let from_citizen_info = new Text(canvas, [325, 275], "Will take "+String(units_info.merchant.convert_into)+" days", "12px Arial", "black", false, 200, undefined);
+        recruit_modal.members.push(from_citizen_info);
       } else if (type === "colonist") {
         //citizen to colonist
         title.text = "Recruit Colonist";
-        //
+        let from_citizen = new TextButton(canvas, [[330, 250], [[325, 230], [480, 260]]], "Convert from Citizen", "15px Arial", "#dbbe1a", "#efe8ee", "white", false, "black", false, function(self) {
+          let success = convert_units(desig, "citizen", "colonist", units_info.colonist.convert_into);
+          if (success) {
+            let og_text = self.text;
+            self.text = "Converting...";
+            setTimeout(function() {
+              self.text = og_text;
+            }, 750);
+          } else {
+            let og_text = self.text;
+            self.color = "red";
+            self.text = "Failed!";
+            setTimeout(function() {
+              self.color = "#dbbe1a";
+              self.text = og_text;
+            }, 750);
+          }
+        });
+        recruit_modal.members.push(from_citizen);
+        let from_citizen_info = new Text(canvas, [325, 275], "Will take "+String(units_info.colonist.convert_into)+" days", "12px Arial", "black", false, 200, undefined);
+        recruit_modal.members.push(from_citizen_info);
       } else {
         //conscript to the subtype
         title.text = "Recruit "+type[0].toUpperCase()+type.slice(1);
@@ -3443,7 +3620,11 @@ function help_scene() {
     {"title": "Map Controls", "content": "Arrow keys or WASD moves the map. Scroll wheel zooms the map in and out.", "content2": ""},
     {"title": "Wealth", "content": "Wealth is gotten in a couple different ways.", "content2": "It is used for construction, unit upkeep and more."},
     {"title": "Residence Tax", "content": "Citizens living in a region pay the region's tax rate every 90 days (1 season).", "content2": "More citizens, more tax. Setting the tax rate too high will decrease happiness."},
-    {"title": "Happiness", "content": "Many factors can affect happiness. Happiness can result in benefits and positive events,", "content2": "or detriments and negative events."}
+    {"title": "Happiness", "content": "Many factors can affect happiness. Happiness can result in benefits and positive events,", "content2": "or detriments and negative events."},
+    {"title": "Units", "content": "", "content2": ""},
+    {"title": "Units: Citizens", "content": "Citizens are the core of any nation, they can do tasks, produce revenue,", "content2": "and easily be converted into other unit types."},
+    //other units...
+    {"title": "Buildings: Settlement", "content": "The settlement building and it's upgrades can house units, and slowly produce citizens.", "content2": ""}
   ];
   canvas.reset();
   //back button
