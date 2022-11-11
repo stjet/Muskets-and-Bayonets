@@ -76,6 +76,32 @@ const buildings_info = {
     "upgrades": ["city"],
     "benefits": "Makes citizens faster and homes 5 units",
     "description": "A bustling town growing all the time."
+  },
+  "city": {
+    "co": {
+      "wealth": 100,
+      "supply": 300
+    },
+    "mt": 0,
+    "ho": 10,
+    "dur": 300,
+    "per": 75,
+    "wor": 0,
+    "pr": {
+      //citizens
+      "ci": 1,
+      //supply
+      "su": 0
+    },
+    "ef": {
+      //
+    },
+    "en": {},
+    "img": "/images/buildings/town.png",
+    "from": "town",
+    "upgrades": [],
+    "benefits": "Makes citizens much faster and homes 10 units",
+    "description": "A metropolis, the center of commerce in the region."
   }
 };
 
@@ -1184,6 +1210,7 @@ class Modal {
     //members of the modal
     this.members = [];
     this.canvas.components.push(this);
+    this.intervals = [];
     //https://stackoverflow.com/questions/4011793/this-is-undefined-in-javascript-class-methods
     this.close = this.close.bind(this);
   }
@@ -1200,6 +1227,9 @@ class Modal {
     this.canvas.components = this.canvas.components.filter(function (item) {
       return this !== item && !this.members.includes(item);
     }, this);
+    this.intervals.forEach(function(interval) {
+      clearInterval(interval);
+    });
   }
   update() {
     //disable canvas onclick and stuff
@@ -1679,7 +1709,7 @@ class Text {
     this.text_info = text_info;
     this.stroke_color = stroke_color;
     this.color = color;
-    this.maxWidth = maxwidth;
+    this.maxwidth = maxwidth;
     this.identity = identity;
     if (this.identity) {
       this.canvas.addEvent("customtextchange", [this], false);
@@ -1719,13 +1749,13 @@ class Text {
         this.canvas.context.lineWidth = this.lineWidth;
       } else {
         this.canvas.context.strokeStyle = this.stroke_color;
-        this.canvas.context.strokeText(this.text, this.coords[0], this.coords[1], this.maxWidth);
+        this.canvas.context.strokeText(this.text, this.coords[0], this.coords[1], this.maxwidth);
       }
     }
     if (this.color) {
       this.canvas.context.fillStyle = this.color;
-      if (this.maxWidth) {
-        this.canvas.context.fillText(this.text, this.coords[0], this.coords[1], this.maxWidth);
+      if (this.maxwidth) {
+        this.canvas.context.fillText(this.text, this.coords[0], this.coords[1], this.maxwidth);
       } else {
         this.canvas.context.fillText(this.text, this.coords[0], this.coords[1]);
       }
@@ -1903,16 +1933,16 @@ class TextInput {
       }
     }
     this.canvas.context.font = this.text_info;
-    let maxWidth = this.coords[1][1][0] - this.coords[1][0][0] - (this.coords[0][0]-this.coords[1][0][0]);
+    let maxwidth = this.coords[1][1][0] - this.coords[1][0][0] - (this.coords[0][0]-this.coords[1][0][0]);
     if (this.active) {
       this.canvas.context.fillStyle = this.active_color;
     } else {
       this.canvas.context.fillStyle = this.inactive_color;
     }
     if (this.fb_add) {
-      this.canvas.context.fillText(this.fb_add[0]+this.current_text+this.fb_add[1], this.coords[0][0], this.coords[0][1], maxWidth);
+      this.canvas.context.fillText(this.fb_add[0]+this.current_text+this.fb_add[1], this.coords[0][0], this.coords[0][1], maxwidth);
     } else {
-      this.canvas.context.fillText(this.current_text, this.coords[0][0], this.coords[0][1], maxWidth);
+      this.canvas.context.fillText(this.current_text, this.coords[0][0], this.coords[0][1], maxwidth);
     }
   }
 }
@@ -2001,6 +2031,44 @@ class Slider {
     this.canvas.context.fillStyle = this.circle_color;
     path3.arc(this.coords[0][0]+(p_interval*this.points.indexOf(this.current)), this.coords[0][1], 7, 0, 2*Math.PI);
     this.canvas.context.fill(path3);
+  }
+}
+
+class ProgressBar {
+  /**
+   * @param {Canvas} canvas
+   * @param {[number[], number, number]} coords
+   * @param {number} max
+   * @param {string?} fill_color
+   * @param {string?} border_color
+   */
+  constructor(canvas, coords, value_function, max, fill_color, border_color) {
+    this.canvas = canvas;
+    //[[top left corner], width, height]
+    this.coords = coords;
+    //call this function to get the current value (this way live updates are possible)
+    this.value_function = value_function;
+    this.max = max;
+    this.fill_color = fill_color;
+    this.border_color = border_color;
+    this.finished = false;
+    this.display = true;
+    this.canvas.components.push(this);
+  }
+  update() {
+    if (!this.display) return;
+    //calculate progress
+    let progress = Math.round(this.coords[1]*(this.value_function()/this.max));
+    if (progress >= this.coords[1]) {
+      progress = this.coords[1];
+      this.finished = true;
+    }
+    //fill
+    this.canvas.context.fillStyle = this.fill_color;
+    this.canvas.context.fillRect(...this.coords[0], progress, this.coords[2]);
+    //outline/border
+    this.canvas.context.strokeStyle = this.border_color;
+    this.canvas.context.strokeRect(...this.coords[0], this.coords[1], this.coords[2]);
   }
 }
 
@@ -2191,6 +2259,7 @@ function convert_units(desig, unit_name, into_unit_name, time) {
     self_nation.recruitment.push({
       desig: desig,
       building: building_name,
+      from: unit_name,
       to: into_unit_name,
       finish: window.ticks+time
     });
@@ -2232,6 +2301,7 @@ function check_recruitment() {
   /*self_nation.recruitment.push({
     desig: desig,
     building: building_name,
+    from: unit_name,
     to: into_unit_name,
     finish: window.ticks+time,
   });*/
@@ -2600,6 +2670,10 @@ function create_region_modal(desig, options) {
   //section functions
   let current_section = [];
   function clear_current_section() {
+    region_modal.intervals.forEach(function(interval) {
+      clearInterval(interval);
+    });
+    region_modal.intervals = [];
     canvas.components = canvas.components.filter(function (item) {
       return !current_section.includes(item);
     });
@@ -3106,6 +3180,36 @@ function create_region_modal(desig, options) {
       let recruit_btn4 = new TextButton(canvas, [[981, 470], [[970, 450], [1040, 480]]], "Recruit", "15px Arial", "#dbbe1a", "#efe8ee", "white", false, "black", false, function() {unit_recruit_modal('merchant')});
       current_section.push(recruit_btn4);
       region_modal.members.push(recruit_btn4);
+      //also display progress bar for unit recruitment
+      let recruitments = self_nation.recruitment.filter(function(item) {
+        return item.desig === desig;
+      });
+      let progresses = [];
+      for (let i=0; i < recruitments.length; i++) {
+        //dont show after the 12th recruitment.. won't fit
+        if (i === 12) break;
+        let column = Math.floor(i/4);
+        let row = i-column*4;
+        let r = recruitments[i];
+        let label = new Text(canvas, [300+270*column, 512+18*row], r.from+" to "+r.to+" recruitment: ", "16px Arial", "black", false, 150, undefined);
+        let progress = new ProgressBar(canvas, [[455+270*column, 500+18*row], 100, 16], function() {return units_info[r.to].convert_into-(r.finish-window.ticks)}, units_info[r.to].convert_into, "black", "black");
+        progresses.push([label, progress]);
+        region_modal.members.push(label);
+        current_section.push(label);
+        region_modal.members.push(progress);
+        current_section.push(progress);
+      }
+      let delete_check = setInterval(function() {
+        for (let p=0; p < progresses.length; p++) {
+          if (progresses[p][1].finished && progresses[p][1].display) {
+            progresses[p][0].text += "Finished!";
+            progresses[p][0].maxwidth = 225;
+            //remove progress bar?
+            progresses[p][1].display = false;
+          }
+        }
+      }, 2000);
+      region_modal.intervals.push(delete_check);
     }
   }
   //region name? number designation maybe?
@@ -3618,13 +3722,15 @@ function help_scene() {
     {"title": "Nation Selection", "content": "Click 'Play', and click a region to start in. Then, enter in name, slogan, and color.", "content2": ""},
     {"title": "Mobile Support", "content": "Very good mobile support is offered. Clicking, inputting, and dragging to move all work.", "content2": ""},
     {"title": "Map Controls", "content": "Arrow keys or WASD moves the map. Scroll wheel zooms the map in and out.", "content2": ""},
-    {"title": "Wealth", "content": "Wealth is gotten in a couple different ways.", "content2": "It is used for construction, unit upkeep and more."},
+    {"title": "Wealth", "content": "Wealth is gotten in a couple different ways. Used for construction, unit upkeep, and more.", "content2": ""},
     {"title": "Residence Tax", "content": "Citizens living in a region pay the region's tax rate every 90 days (1 season).", "content2": "More citizens, more tax. Setting the tax rate too high will decrease happiness."},
     {"title": "Happiness", "content": "Many factors can affect happiness. Happiness can result in benefits and positive events,", "content2": "or detriments and negative events."},
     {"title": "Units", "content": "", "content2": ""},
     {"title": "Units: Citizens", "content": "Citizens are the core of any nation, they can do tasks, produce revenue,", "content2": "and easily be converted into other unit types."},
     //other units...
+    {"title": "Buildings", "content": "Each settlement can have one building of each chain. Buildings can produce units, resources,", "content2": "and provide other benefits. They take time to build, as well as supply and wealth to build."},
     {"title": "Buildings: Settlement", "content": "The settlement building and it's upgrades can house units, and slowly produce citizens.", "content2": ""}
+    //other buildings...
   ];
   canvas.reset();
   //back button
