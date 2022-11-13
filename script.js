@@ -1317,6 +1317,30 @@ function toggleOverlay() {
     //overlay2_objects
     let happiness_display = new Text(canvas, [232, 685], "Happiness: "+String(self_nation.happiness)+"%", "17px Arial", "black", false, 90, "happiness-display");
     overlay2_objects.push(happiness_display);
+    //map view
+    let left_map_view = new TextButton(canvas, [[373, 605], [[370, 590], [382, 607]]], "‹", "25px Arial", false, "black", "black", false, false, false, function() {
+      let current_index = window.game_views.indexOf(window.game_view);
+      current_index--;
+      if (current_index < 0) {
+        current_index = window.game_views.length-1;
+      }
+      window.game_view = window.game_views[current_index];
+      canvas.canvas.dispatchEvent(new CustomEvent("customtextchange", {detail: {"game-view": window.game_view}}));
+    });
+    overlay2_objects.push(left_map_view);
+    let right_map_view = new TextButton(canvas, [[528, 605], [[525, 590], [537, 607]]], "›", "25px Arial", false, "black", "black", false, false, false, function() {
+      let current_index = window.game_views.indexOf(window.game_view);
+      console.log(current_index)
+      current_index++;
+      if (current_index === window.game_views.length) {
+        current_index = 0;
+      }
+      window.game_view = window.game_views[current_index];
+      canvas.canvas.dispatchEvent(new CustomEvent("customtextchange", {detail: {"game-view": window.game_view}}));
+    });
+    overlay2_objects.push(right_map_view);
+    let game_view_text = new Text(canvas, [420, 605], window.game_view, "15px Arial", "black", false, false, "game-view");
+    overlay2_objects.push(game_view_text);
   } else if (window.gameOverlayObject.image_url === "/images/nnom_overlay2.png") {
     window.gameOverlayObject.image_url = "/images/nnom_overlay.png";
     window.gameOverlayObject.image = game_overlay;
@@ -1373,6 +1397,7 @@ class Building {
     this.building_name = building_name;
     this.path = undefined;
     this.clicked = false;
+    this.display = true;
     //text classes and what not that appear in panel on click of building
     this.info_objs = [];
     //calculate coords of where to put
@@ -1401,7 +1426,7 @@ class Building {
     if (this.canvas.click_temp_disabled) {
       return;
     }
-    if (this.canvas.context.isPointInPath(this.path, e.offsetX, e.offsetY) && !this.clicked) {
+    if (this.canvas.context.isPointInPath(this.path, e.offsetX, e.offsetY) && !this.clicked && this.display) {
       toggleOverlay();
       //valid click
       let name = new Text(this.canvas, [370, 605], this.building_name, "18px Arial", "black", false, 180, undefined);
@@ -1446,6 +1471,13 @@ class Building {
     }
   }
   update() {
+    //hide buildings if wrong view
+    if (window.game_view !== "buildings" && this.display) {
+      this.display = false;
+    } else if (window.game_view === "buildings" && !this.display) {
+      this.display = true;
+    }
+    if (!this.display) return;
     let use_image;
     if (window.gameScaleFactor <= 1) {
       use_image = this.buildingImage;
@@ -3327,9 +3359,11 @@ function point_in_region(p, desig) {
     }
   }
   //make sure its not in a building
-  for (let i=0; i < self.buildings.length; i++) {
-    if (canvas.context.isPointInPath(self.buildings[i].path, p[0], p[1])) {
-      in_region = false;
+  if (window.game_view === "buildings") {
+    for (let i=0; i < self.buildings.length; i++) {
+      if (canvas.context.isPointInPath(self.buildings[i].path, p[0], p[1])) {
+        in_region = false;
+      }
     }
   }
   return in_region;
@@ -3556,6 +3590,29 @@ function game_scene() {
   new Building(canvas, window.starting_region, "settlement");
   let happiness_display = new Text(canvas, [232, 685], "Happiness: 50%", "17px Arial", "black", false, 90, "happiness-display");
   overlay2_objects.push(happiness_display);
+  let left_map_view = new TextButton(canvas, [[373, 605], [[370, 590], [382, 607]]], "‹", "25px Arial", false, "black", "black", false, false, false, function() {
+    let current_index = window.game_views.indexOf(window.game_view);
+    current_index--;
+    if (current_index < 0) {
+      current_index = window.game_views.length-1;
+    }
+    window.game_view = window.game_views[current_index];
+    canvas.canvas.dispatchEvent(new CustomEvent("customtextchange", {detail: {"game-view": window.game_view}}));
+  });
+  overlay2_objects.push(left_map_view);
+  let right_map_view = new TextButton(canvas, [[528, 605], [[525, 590], [537, 607]]], "›", "25px Arial", false, "black", "black", false, false, false, function() {
+    let current_index = window.game_views.indexOf(window.game_view);
+    console.log(current_index)
+    current_index++;
+    if (current_index === window.game_views.length) {
+      current_index = 0;
+    }
+    window.game_view = window.game_views[current_index];
+    canvas.canvas.dispatchEvent(new CustomEvent("customtextchange", {detail: {"game-view": window.game_view}}));
+  });
+  overlay2_objects.push(right_map_view);
+  let game_view_text = new Text(canvas, [420, 605], window.game_view, "15px Arial", "black", false, false, "game-view");
+  overlay2_objects.push(game_view_text);
 }
 
 /**
