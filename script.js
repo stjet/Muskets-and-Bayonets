@@ -102,6 +102,29 @@ const buildings_info = {
     "upgrades": [],
     "benefits": "Makes citizens much faster and homes 10 units",
     "description": "A metropolis, the center of commerce in the region."
+  },
+  "farm": {
+    "co": {
+      "wealth": 10,
+      "supply": 40
+    },
+    "mt": 0,
+    "ho": 0,
+    "dur": 40,
+    "per": 10,
+    "wor": 0,
+    "pr": {
+      //supply
+      "su": 5
+    },
+    "ef": {
+      //
+    },
+    "en": {},
+    "img": "/images/buildings/settlement_simp.png",
+    "upgrades": [],
+    "benefits": "Produces 5 supply per citizen every 10 days",
+    "description": "Farms: They make food™️."
   }
 };
 
@@ -1370,6 +1393,9 @@ cityImage.src = "/images/buildings/city.png";
 let cityImage_simp = new Image();
 cityImage_simp.src = "/images/buildings/city_simp.png";
 
+let farmImage_simp = new Image();
+farmImage_simp.src = "/images/buildings/farm_simp.png";
+
 let citizenImage = new Image();
 citizenImage.src = "/images/units/citizen.png";
 
@@ -1385,7 +1411,8 @@ merchantImage.src = "/images/units/merchant.png";
 const buildingImages = {
   settlement: settlementImage_simp,
   town: townImage_simp,
-  city: cityImage_simp
+  city: cityImage_simp,
+  farm: farmImage_simp
 }
 
 //just the picture of building on map, not info
@@ -1402,8 +1429,8 @@ class Building {
     this.info_objs = [];
     //calculate coords of where to put
     this.living = ["settlement", "town", "city"];
+    let avg_p = findAveragePoint(this.region_desig);
     if (this.living.includes(this.building_name)) {
-      let avg_p = findAveragePoint(this.region_desig);
       this.coords = [[avg_p[0]-30, avg_p[1]-30], [avg_p[0]+30, avg_p[1]+30]];
       if (this.building_name === "settlement") {
         this.buildingImage = settlementImage;
@@ -1415,6 +1442,10 @@ class Building {
         this.buildingImage = cityImage;
         this.simpBuildingImage = buildingImages.city;
       }
+    } else if (this.building_name === "farm") {
+      this.coords = [[avg_p[0]-72, avg_p[1]-72], [avg_p[0]-12, avg_p[1]-12]];
+      this.buildingImage = buildingImages.farm;
+      this.simpBuildingImage = buildingImages.farm;
     }
     //onclick that adds info to bottom left panel, also stops region modal from opening.
     //maybe special cursor?
@@ -2414,6 +2445,8 @@ function check_construction() {
         if (["town", "city"].includes(c.type)) {
           b_add.homes = prev_b.homes;
         }
+      } else if (["farm"].includes(c.type)) {
+        b_add.workers = 0;
       }
       regions_info[c.desig].buildings.push(b_add);
       new Building(canvas, c.desig, c.type);
@@ -2434,9 +2467,11 @@ function calculate_happiness() {
         //if building has a special effect on happiness (negative or positive)
         calculated_happiness += buildings_info[o_building.type].ef.hap;
       }
-      citizens += o_building.homes.filter(function (item) {
-        return item.name === "citizen";
-      }).length;
+      if (o_building.homes) {
+        citizens += o_building.homes.filter(function (item) {
+          return item.name === "citizen";
+        }).length;
+      }
     }
     //+1 happiness
     calculated_happiness += citizens;
@@ -2505,7 +2540,8 @@ function unit_production() {
           }
         }
         if (o_b_info.pr.su > 0) {
-          self_nation.supply += o_b_info.pr.su;
+          //multiply by amount of citizens working there
+          self_nation.supply += o_b_info.pr.su*o_building.workers;
         }
       }
     }
@@ -2649,6 +2685,7 @@ function normal_speed_button() {
 }
 
 function get_buildable_buildings(desig) {
+  //iterate through buildings and add the upgrades, and not built
   let buildable = [];
   let region_buildings = regions_info[desig].buildings;
   for (let i=0; i < region_buildings.length; i++) {
@@ -2670,7 +2707,29 @@ function get_buildable_buildings(desig) {
       });
     }
   }
-  //iterate through buildings and add the upgrades, and not built
+  let region_building_names = region_buildings.map(item => item.type);
+  for (let j=0; j < Object.keys(buildings_info).length; j++) {
+    let building_name = Object.keys(buildings_info)[j];
+    let building_info = buildings_info[building_name];
+    //not an upgrade of something else
+    if (!building_info.from) {
+      //make sure building isn't already built
+      if (!region_building_names.includes(building_name)) {
+        //add
+        buildable.push({
+          name: building_name,
+          image: buildingImages[building_name],
+          benefits: building_info.benefits,
+          description: building_info.description,
+          cost: {
+            duration: building_info.dur,
+            wealth: building_info.co.wealth,
+            supply: building_info.co.supply
+          }
+        });
+      }
+    }
+  }
   //placeholder for now
   /*return [{
     //name, image, benefits, description, cost
@@ -2771,6 +2830,7 @@ function create_region_modal(desig, options) {
     }
     */
     let construction_index = 0; //and construction_index+1
+    console.log(buildable_buildings)
     //buildable_buildings[construction_index]
     let cc1_b = buildable_buildings[construction_index];
     let cc1;
