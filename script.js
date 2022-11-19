@@ -1145,8 +1145,48 @@ class TextButton {
   }
 }
 
+class ImageButton {
+  /**
+   * @param {Canvas} canvas
+   * @param {number[]} coords
+   * @param {number[]} size
+   * @param {string} image_url
+   * @param {Image} image
+   */
+  constructor(canvas, coords, size, image_url, image, onclick) {
+    this.canvas = canvas;
+    //upper left corner?
+    this.coords = coords;
+    this.size = size;
+    this.image_url = image_url;
+    this.image = image;
+    this.click = function(e) {
+      //check if within coords
+      if ((e.offsetX > this.coords[0] && e.offsetX < this.coords[0]+this.size[0]) && (e.offsetY > this.coords[1] && e.offsetY < this.coords[1]+this.size[1])) {
+        onclick(self);
+      }
+    }
+    this.canvas.addEvent("click", [this], false);
+    this.canvas.components.push(this);
+  }
+  update() {
+    if (!this.image) {
+      this.image = new Image();
+      this.image.src = this.image_url;
+    }
+    this.canvas.context.drawImage(this.image, this.coords[0], this.coords[1], this.size[0], this.size[1]);
+  }
+}
+
 class BasicImage {
-  constructor(canvas, coords, size, image_url, image) {
+  /**
+   * @param {Canvas} canvas
+   * @param {number[]} coords
+   * @param {number[]} size
+   * @param {string} image_url
+   * @param {Image} image
+   */
+  constructor(canvas, coords, size, image_url, image, onclick) {
     this.canvas = canvas;
     this.coords = coords;
     this.size = size;
@@ -1331,6 +1371,11 @@ game_overlay.src = "/images/nnom_overlay.png";
 let game_overlay2 = new Image();
 game_overlay2.src = "/images/nnom_overlay2.png";
 
+//lower left icons
+
+let settingsImage = new Image();
+settingsImage.src = "/images/icons/settings.png";
+
 let overlay2_objects = [];
 function toggleOverlay() {
   //toggles between 9 button overlay and info panel overlay (difference is in lower left corner)
@@ -1364,6 +1409,9 @@ function toggleOverlay() {
     overlay2_objects.push(right_map_view);
     let game_view_text = new Text(canvas, [420, 605], window.game_view, "15px Arial", "black", false, false, "game-view");
     overlay2_objects.push(game_view_text);
+    //settings cog
+    let settings_btn = new ImageButton(canvas, [160, 653], [65, 38], false, settingsImage, function(){console.log('settings button clicked')});
+    overlay2_objects.push(settings_btn);
   } else if (window.gameOverlayObject.image_url === "/images/nnom_overlay2.png") {
     window.gameOverlayObject.image_url = "/images/nnom_overlay.png";
     window.gameOverlayObject.image = game_overlay;
@@ -1374,6 +1422,8 @@ function toggleOverlay() {
     overlay2_objects = [];
   }
 }
+
+//buildings, units
 
 let settlementImage = new Image();
 settlementImage.src = "/images/buildings/settlement.png";
@@ -1443,7 +1493,8 @@ class Building {
         this.simpBuildingImage = buildingImages.city;
       }
     } else if (this.building_name === "farm") {
-      this.coords = [[avg_p[0]-72, avg_p[1]-72], [avg_p[0]-12, avg_p[1]-12]];
+      //slightly smaller
+      this.coords = [[avg_p[0]-62, avg_p[1]-62], [avg_p[0]-12, avg_p[1]-12]];
       this.buildingImage = buildingImages.farm;
       this.simpBuildingImage = buildingImages.farm;
     }
@@ -1482,6 +1533,9 @@ class Building {
         let housed_units_num = self_obj.homes.length;
         let housed_text = new Text(this.canvas, [370, 627], "Housing: "+String(housed_units_num), "12px Arial", "black", false, 180, undefined);
         this.info_objs.push(housed_text);
+      } else if (self_obj.workers !== undefined) {
+        let workers = new Text(this.canvas, [370, 627], "Workers: "+String(self_obj.workers), "12px Arial", "black", false, 180, undefined);
+        this.info_objs.push(workers);
       }
       this.info_objs.push(name);
       this.clicked = true;
@@ -1521,7 +1575,15 @@ class Building {
     let path = new Path2D();
     if (this.living.includes(this.building_name)) {
       //center x, center y, radius, start angle, end angle
+      //circle path
       path.arc((mod_coords[0][0]+mod_coords[1][0])/2, (mod_coords[0][1]+mod_coords[1][1])/2, (mod_coords[1][0]-mod_coords[0][0])/2, 0, 2*Math.PI);
+    } else {
+      //square path
+      path.moveTo(mod_coords[0][0], mod_coords[0][1]);
+      path.lineTo(mod_coords[1][0], mod_coords[0][1]);
+      path.lineTo(mod_coords[1][0], mod_coords[1][1]);
+      path.lineTo(mod_coords[0][0], mod_coords[1][1]);
+      path.lineTo(mod_coords[0][0], mod_coords[0][1]);
     }
     this.path = path;
   }
@@ -2558,9 +2620,11 @@ function calculate_happiness_contribution(desig) {
       //if building has a special effect on happiness (negative or positive)
       contrib += buildings_info[o_building.type].ef.hap;
     }
-    citizens += o_building.homes.filter(function (item) {
-      return item.name === "citizen";
-    }).length;
+    if (o_building.homes) {
+      citizens += o_building.homes.filter(function (item) {
+        return item.name === "citizen";
+      }).length;
+    }
   }
   //+1 happiness for each citizen
   contrib += citizens;
@@ -2600,9 +2664,11 @@ function calculate_wealth_contribution(desig) {
       //if building has a special effect on happiness (negative or positive)
       contrib += buildings_info[o_building.type].ef.hap;
     }
-    citizens += o_building.homes.filter(function (item) {
-      return item.name === "citizen";
-    }).length;
+    if (o_building.homes) {
+      citizens += o_building.homes.filter(function (item) {
+        return item.name === "citizen";
+      }).length;
+    }
   }
   switch (o_region.residence_tax) {
     case 0:
@@ -2830,7 +2896,6 @@ function create_region_modal(desig, options) {
     }
     */
     let construction_index = 0; //and construction_index+1
-    console.log(buildable_buildings)
     //buildable_buildings[construction_index]
     let cc1_b = buildable_buildings[construction_index];
     let cc1;
@@ -3436,6 +3501,8 @@ function game_scene() {
   if (Number(window.starting_region) == 11) {
     //11 is special case because kinda far
     window.gameTranslate = [75, 300];
+  } else if (Number(window.starting_region) >= 74 && Number(window.starting_region) <= 77) {
+    window.gameTranslate = [600, 1100];
   } else if (Number(window.starting_region) <= 20) {
     window.gameTranslate = [0, 0];
   } else if (Number(window.starting_region) <= 29) {
@@ -3480,17 +3547,17 @@ function game_scene() {
     if (canvas.keydown_temp_disabled) {
       return;
     }
-    if (!window.gamePressedKeys.includes(e.key)) {
-      window.gamePressedKeys.push(e.key);
+    if (!window.gamePressedKeys.includes(e.key.toLowerCase())) {
+      window.gamePressedKeys.push(e.key.toLowerCase());
     }
     //if up, down, left, right
-    function movement_handling(e) {
-      let move_change = 3;
-      if (e.shiftKey) {
+    function movement_handling(key) {
+      let move_change = 4;
+      if (window.gamePressedKeys.includes("shift")) {
         //make it go faster when shift held down
-        move_change = 5;
+        move_change = 7;
       }
-      switch (e.key.toLowerCase()) {
+      switch (key.toLowerCase()) {
         case "w":
         case "arrowup":
           window.gameTranslate[1] -= move_change;
@@ -3509,11 +3576,21 @@ function game_scene() {
           break;
         default: break;
       }
+      //honestly I tried doing this logically but it didn't work. so I just trialed and errored a bit
+      if (window.gameTranslate[0] > 2300) {
+        window.gameTranslate[0] = 2300;
+      } else if (window.gameTranslate[0] < -1700) {
+        window.gameTranslate[0] = -1700;
+      } else if (window.gameTranslate[1] > 2300) {
+        window.gameTranslate[1] = 2300;
+      } else if (window.gameTranslate[1] < -700) {
+        window.gameTranslate[1] = -700;
+      }
     }
-    movement_handling(e);
-    let directional_keys = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"];
+    movement_handling(e.key);
+    let directional_keys = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "w", "a", "s", "d"];
     for (let i=0; i < directional_keys.length; i++) {
-      if (directional_keys[i] !== e.key && window.gamePressedKeys.includes(directional_keys[i])) {
+      if (directional_keys[i] !== e.key && window.gamePressedKeys.includes(directional_keys[i].toLowerCase())) {
         movement_handling(directional_keys[i]);
       }
     }
@@ -3521,7 +3598,7 @@ function game_scene() {
   document.addEventListener("keyup", function(e) {
     let unpressed_key = e.key;
     window.gamePressedKeys = window.gamePressedKeys.filter(function(value) {
-      return value !== unpressed_key;
+      return value !== unpressed_key.toLowerCase();
     });
   });
   if (is_mobile) {
@@ -3546,6 +3623,16 @@ function game_scene() {
       let x_diff = e.touches[0].clientX - window.gameTSInfo.og_coords[0];
       let y_diff = e.touches[0].clientY - window.gameTSInfo.og_coords[1];
       window.gameTranslate = [window.gameTSInfo.og_translate[0] - x_diff, window.gameTSInfo.og_translate[1] - y_diff];
+      console.log(window.gameTranslate[0])
+      if (window.gameTranslate[0] > 2300) {
+        window.gameTranslate[0] = 2300;
+      } else if (window.gameTranslate[0] < -1700) {
+        window.gameTranslate[0] = -1700;
+      } else if (window.gameTranslate[1] > 2300) {
+        window.gameTranslate[1] = 2300;
+      } else if (window.gameTranslate[1] < -700) {
+        window.gameTranslate[1] = -700;
+      }
     });
     document.addEventListener("touchend", function(e) {
       if (canvas.touchmove_temp_disabled || !window.gameTSInfo) {
@@ -3673,6 +3760,9 @@ function game_scene() {
   overlay2_objects.push(right_map_view);
   let game_view_text = new Text(canvas, [420, 605], window.game_view, "15px Arial", "black", false, false, "game-view");
   overlay2_objects.push(game_view_text);
+  //settings cog
+  let settings_btn = new ImageButton(canvas, [160, 653], [65, 38], false, settingsImage, function(){console.log('settings button clicked')});
+  overlay2_objects.push(settings_btn);
 }
 
 /**
@@ -3838,7 +3928,7 @@ function help_scene() {
     {"title": "Welcome!", "content": "Muskets and Bayonets is a real time grand strategy game set in the early gunpowder era.", "content2": ""},
     {"title": "Nation Selection", "content": "Click 'Play', and click a region to start in. Then, enter in name, slogan, and color.", "content2": ""},
     {"title": "Mobile Support", "content": "Very good mobile support is offered. Clicking, inputting, and dragging to move all work.", "content2": ""},
-    {"title": "Map Controls", "content": "Arrow keys or WASD moves the map. Scroll wheel zooms the map in and out.", "content2": ""},
+    {"title": "Map Controls", "content": "Arrow keys or WASD moves the map. Scroll wheel zooms the map in and out.", "content2": "Pressing shift and any of the WASD keys at the same time increases camera speed."},
     {"title": "Wealth", "content": "Wealth is gotten in a couple different ways. Used for construction, unit upkeep, and more.", "content2": ""},
     {"title": "Residence Tax", "content": "Citizens living in a region pay the region's tax rate every 90 days (1 season).", "content2": "More citizens, more tax. Setting the tax rate too high will decrease happiness."},
     {"title": "Happiness", "content": "Many factors can affect happiness. Happiness can result in benefits and positive events,", "content2": "or detriments and negative events."},
