@@ -821,8 +821,8 @@ let self_nation = {
   slogan: "",
   color: "",
   land_tax: 2,
-  wealth: 0,
-  supply: 0,
+  wealth: 50,
+  supply: 50,
   happiness: 0,
   owned_regions: [],
   construction: [],
@@ -1534,8 +1534,90 @@ class Building {
         let housed_text = new Text(this.canvas, [370, 627], "Housing: "+String(housed_units_num), "12px Arial", "black", false, 180, undefined);
         this.info_objs.push(housed_text);
       } else if (self_obj.workers !== undefined) {
-        let workers = new Text(this.canvas, [370, 627], "Workers: "+String(self_obj.workers), "12px Arial", "black", false, 180, undefined);
+        let workers = new Text(this.canvas, [370, 627], "Workers: "+String(self_obj.workers), "12px Arial", "black", false, 180, "farm-workers");
         this.info_objs.push(workers);
+        //button to assign worker, button to unassign worker
+        let parent = this;
+        let assign = new TextButton(canvas, [[230, 651], [[227, 632], [327, 657]]], "Assign 1 Worker", "12px Arial", false, "black", "#041616", false, false, false, function(self) {
+          //see if available citizen
+          //regions_info[this.region_desig]
+          let buildings = regions_info[parent.region_desig].buildings;
+          let found_citizen = false;
+          for (let i=0; i < buildings.length; i++) {
+            let building = buildings[i];
+            if (building.homes) {
+              for (let j=0; j < building.homes.length; j++) {
+                if (!building.homes[j].task && building.homes[j].name === "citizen") {
+                  //available, give task to citizen
+                  found_citizen = true;
+                  regions_info[parent.region_desig].buildings[i].homes[j].task = "farm";
+                  break;
+                }
+              }
+            }
+          }
+          if (!found_citizen) {
+            //fail message
+            self.text = "Failed";
+            setTimeout(function() {
+              self.text = "Assign 1 Worker";
+            }, 500);
+            return;
+          }
+          //add worker
+          for (let i=0; i < buildings.length; i++) {
+            if (buildings[i].type === "farm") {
+              buildings[i].workers += 1;
+              self.text = "Success";
+              setTimeout(function() {
+                self.text = "Assign 1 Worker";
+              }, 800);
+              canvas.canvas.dispatchEvent(new CustomEvent("customtextchange", {detail: {"farm-workers": "Workers: "+String(self_obj.workers)}}));
+              return;
+            }
+          }
+        });
+        this.info_objs.push(assign);
+        let unassign = new TextButton(canvas, [[230, 681], [[227, 662], [327, 687]]], "Remove 1 Worker", "12px Arial", false, "black", "#041616", false, false, false, function(self) {
+          //see if available citizen
+          //regions_info[this.region_desig]
+          let buildings = regions_info[parent.region_desig].buildings;
+          let found_citizen = false;
+          for (let i=0; i < buildings.length; i++) {
+            let building = buildings[i];
+            if (building.homes) {
+              for (let j=0; j < building.homes.length; j++) {
+                if (building.homes[j].task === "farm" && building.homes[j].name === "citizen") {
+                  //remove task
+                  found_citizen = true;
+                  regions_info[parent.region_desig].buildings[i].homes[j].task = false;
+                  break;
+                }
+              }
+            }
+          }
+          if (!found_citizen) {
+            //fail message
+            self.text = "Failed";
+            setTimeout(function() {
+              self.text = "Remove 1 Worker";
+            }, 500);
+            return;
+          }
+          //add worker
+          for (let i=0; i < buildings.length; i++) {
+            if (buildings[i].type === "farm") {
+              buildings[i].workers -= 1;
+              self.text = "Success";
+              setTimeout(function() {
+                self.text = "Remove 1 Worker";
+              }, 800);
+              canvas.canvas.dispatchEvent(new CustomEvent("customtextchange", {detail: {"farm-workers": "Workers: "+String(self_obj.workers)}}));
+              return;
+            }
+          }
+        });
+        this.info_objs.push(unassign);
       }
       this.info_objs.push(name);
       this.clicked = true;
@@ -3932,11 +4014,13 @@ function help_scene() {
     {"title": "Wealth", "content": "Wealth is gotten in a couple different ways. Used for construction, unit upkeep, and more.", "content2": ""},
     {"title": "Residence Tax", "content": "Citizens living in a region pay the region's tax rate every 90 days (1 season).", "content2": "More citizens, more tax. Setting the tax rate too high will decrease happiness."},
     {"title": "Happiness", "content": "Many factors can affect happiness. Happiness can result in benefits and positive events,", "content2": "or detriments and negative events."},
+    {"title": "Recruiting", "content": "Citizens can be converted into other units. However, if they are assigned to a task,", "content2": "they cannot be converted. Other units can also be deconverted into citizens."},
     {"title": "Units", "content": "", "content2": ""},
     {"title": "Units: Citizens", "content": "Citizens are the core of any nation, they can do tasks, produce revenue,", "content2": "and easily be converted into other unit types."},
     //other units...
     {"title": "Buildings", "content": "Each settlement can have one building of each chain. Buildings can produce units, resources,", "content2": "and provide other benefits. They take time to build, as well as supply and wealth to build."},
-    {"title": "Buildings: Settlement", "content": "The settlement building and it's upgrades can house units, and slowly produce citizens.", "content2": ""}
+    {"title": "Buildings: Settlement", "content": "The settlement building and it's upgrades can house units, and slowly produce citizens.", "content2": ""},
+    {"title": "Buildings: Farms", "content": "Farms and it's upgrades produce supply, when citizens are assigned to it.", "content2": "The more citizens assigned to the farm, the more supply it produces."}
     //other buildings...
   ];
   canvas.reset();
@@ -3958,6 +4042,11 @@ function help_scene() {
       window.helpIndex = 0;
     }
     canvas.canvas.dispatchEvent(new CustomEvent("customtextchange", {detail: help_info[window.helpIndex]}));
+    canvas.context.font = "50px Arial";
+    let title_text_width = canvas.context.measureText(help_info[window.helpIndex].title).width;
+    canvas.canvas.dispatchEvent(new CustomEvent("customcoordschange", {detail: {
+      "title": [Math.floor(canvas.canvas.width/2-title_text_width/2), 250]
+    }}));
   });
   //help text
   new Text(canvas, [canvas.canvas.width/2-150, 250], help_info[window.helpIndex].title, "50px Arial", "black", false, 690, "title");
