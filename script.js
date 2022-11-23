@@ -1253,6 +1253,8 @@ class MovingBackground {
       this.image = new Image();
       this.image.src = this.image_url;
     }
+    //due to safari bug >:( negative coord images aren't displayed properly
+    //https://stackoverflow.com/questions/53470133/html5-canvas-drawimage-safari-12-0-bug-tested-on-ios-12-1-mac-os-mojave
     this.canvas.context.drawImage(this.image, window.gameTranslate[0], window.gameTranslate[1], 1200*window.gameScaleFactor, 700*window.gameScaleFactor, 0, 0, this.canvas.canvas.width, this.canvas.canvas.height);
   }
 }
@@ -1410,7 +1412,7 @@ function toggleOverlay() {
     let game_view_text = new Text(canvas, [420, 605], window.game_view, "15px Arial", "black", false, false, "game-view");
     overlay2_objects.push(game_view_text);
     //settings cog
-    let settings_btn = new ImageButton(canvas, [160, 653], [65, 38], false, settingsImage, function(){console.log('settings button clicked')});
+    let settings_btn = new ImageButton(canvas, [160, 653], [65, 38], false, settingsImage, create_settings_modal);
     overlay2_objects.push(settings_btn);
   } else if (window.gameOverlayObject.image_url === "/images/nnom_overlay2.png") {
     window.gameOverlayObject.image_url = "/images/nnom_overlay.png";
@@ -1951,9 +1953,11 @@ class Text {
     //eg: shadow-white
     if (this.stroke_color) {
       if (this.stroke_color.startsWith('shadow-')) {
-        this.canvas.context.shadowColor = this.stroke_color.split("-")[1];
-        this.canvas.context.shadowBlur = this.shadowBlur;
-        this.canvas.context.lineWidth = this.lineWidth;
+        if (window.settings.shadow) {
+          this.canvas.context.shadowColor = this.stroke_color.split("-")[1];
+          this.canvas.context.shadowBlur = this.shadowBlur;
+          this.canvas.context.lineWidth = this.lineWidth;
+        }
       } else {
         this.canvas.context.strokeStyle = this.stroke_color;
         this.canvas.context.strokeText(this.text, this.coords[0], this.coords[1], this.maxwidth);
@@ -2276,6 +2280,57 @@ class ProgressBar {
     //outline/border
     this.canvas.context.strokeStyle = this.border_color;
     this.canvas.context.strokeRect(...this.coords[0], this.coords[1], this.coords[2]);
+  }
+}
+
+//toggles a bool variable
+class Toggle {
+  constructor(canvas, coords, get_function, change_function) {
+    this.canvas = canvas;
+    this.coords = coords;
+    this.get_function = get_function;
+    this.change_function = change_function;
+    //this.path = new Path2D();
+    this.canvas.addEvent("click", [this], false);
+    this.canvas.components.push(this);
+  }
+  click(e) {
+    //e.offsetX e.offsetY
+    if (this.canvas.context.isPointInPath(this.path, e.offsetX, e.offsetY)) {
+      if (this.get_function()) {
+        this.change_function(false);
+      } else {
+        this.change_function(true);
+      }
+    }
+  }
+  update() {
+    let path = new Path2D();
+    path.moveTo(...this.coords);
+    //width: 70
+    //radius: 15
+    path.arc(this.coords[0], this.coords[1]+15, 15, Math.PI/2, Math.PI*3/2);
+    path.rect(this.coords[0], this.coords[1], 40, 30)
+    path.arc(this.coords[0]+40, this.coords[1]+15, 15, -Math.PI/2, -Math.PI*3/2);
+    canvas.context.lineWidth = 3;
+    canvas.context.strokeStyle = "black";
+    canvas.context.stroke(path);
+    if (this.get_function()) {
+      canvas.context.fillStyle = "green";
+    } else {
+      canvas.context.fillStyle = "red";
+    }
+    this.path = path;
+    canvas.context.fill(path);
+    //inner circle
+    canvas.context.fillStyle = "white";
+    let path_inner = new Path2D();
+    if (this.get_function()) {
+      path_inner.arc(this.coords[0]+40, this.coords[1]+16, 13, 0, Math.PI*2);
+    } else {
+      path_inner.arc(this.coords[0], this.coords[1]+16, 13, 0, Math.PI*2);
+    }
+    canvas.context.fill(path_inner);
   }
 }
 
@@ -3557,6 +3612,28 @@ function create_sea_modal(desig) {
   //
 }
 
+window.settings = {
+  shadow: true,
+  negative_coords: false
+};
+
+function create_settings_modal() {
+  let settings_modal = new Modal(canvas, [[100, 100], [canvas.canvas.width-100, canvas.canvas.height-100]], "white", true, 0.7, "black");
+  let close_button = new TextButton(canvas, [[settings_modal.coords[1][0]-47, settings_modal.coords[0][1]+47], [[settings_modal.coords[1][0]-50, settings_modal.coords[0][1]+10], [settings_modal.coords[1][0]-10, settings_modal.coords[0][1]+50]]], "x", "34px Arial", false, "black", "#041616", false, false, true, settings_modal.close);
+  settings_modal.members.push(close_button);
+  let name = new Text(canvas, [150, 150], "Settings", "35px Arial", "black", false, 150, undefined);
+  settings_modal.members.push(name);
+  //toggles for settings
+  let shadow_label = new Text(canvas, [150, 200], "Text Shadow:", "14px Arial", "black", false, 250, undefined);
+  settings_modal.members.push(shadow_label);
+  let shadow_toggle = new Toggle(canvas, [425, 185], function(){return window.settings.shadow}, function(new_bool){window.settings.shadow = new_bool});
+  settings_modal.members.push(shadow_toggle);
+  let negative_label = new Text(canvas, [150, 240], "Map negative coords (impossible on safari):", "14px Arial", "black", false, 250, undefined);
+  settings_modal.members.push(negative_label);
+  let negative_toggle = new Toggle(canvas, [425, 225], function(){return window.settings.negative_coords}, function(new_bool){window.settings.negative_coords = new_bool});
+  settings_modal.members.push(negative_toggle);
+}
+
 function point_in_region(p, desig) {
   let in_region = false;
   let self = regions_info[desig].region_obj;
@@ -3661,12 +3738,21 @@ function game_scene() {
       //honestly I tried doing this logically but it didn't work. so I just trialed and errored a bit
       if (window.gameTranslate[0] > 2300) {
         window.gameTranslate[0] = 2300;
-      } else if (window.gameTranslate[0] < -1700) {
-        window.gameTranslate[0] = -1700;
       } else if (window.gameTranslate[1] > 2300) {
         window.gameTranslate[1] = 2300;
-      } else if (window.gameTranslate[1] < -700) {
-        window.gameTranslate[1] = -700;
+      }
+      if (window.settings.negative_coords) {
+        if (window.gameTranslate[0] < -1700) {
+          window.gameTranslate[0] = -1700;
+        } else if (window.gameTranslate[1] < -700) {
+          window.gameTranslate[1] = -700;
+        }
+      } else {
+        if (window.gameTranslate[0] < 0) {
+          window.gameTranslate[0] = 0;
+        }  else if (window.gameTranslate[1] < 0) {
+          window.gameTranslate[1] = 0;
+        }
       }
     }
     movement_handling(e.key);
@@ -3705,15 +3791,25 @@ function game_scene() {
       let x_diff = e.touches[0].clientX - window.gameTSInfo.og_coords[0];
       let y_diff = e.touches[0].clientY - window.gameTSInfo.og_coords[1];
       window.gameTranslate = [window.gameTSInfo.og_translate[0] - x_diff, window.gameTSInfo.og_translate[1] - y_diff];
-      console.log(window.gameTranslate[0])
       if (window.gameTranslate[0] > 2300) {
         window.gameTranslate[0] = 2300;
-      } else if (window.gameTranslate[0] < -1700) {
-        window.gameTranslate[0] = -1700;
       } else if (window.gameTranslate[1] > 2300) {
         window.gameTranslate[1] = 2300;
-      } else if (window.gameTranslate[1] < -700) {
-        window.gameTranslate[1] = -700;
+      }
+      if (window.settings.negative_coords) {
+        if (window.gameTranslate[0] < -1700) {
+          //-1700
+          window.gameTranslate[0] = -1700;
+        } else if (window.gameTranslate[1] < -700) {
+          //-700
+          window.gameTranslate[1] = -700;
+        }
+      } else {
+        if (window.gameTranslate[0] < 0) {
+          window.gameTranslate[0] = 0;
+        }  else if (window.gameTranslate[1] < 0) {
+          window.gameTranslate[1] = 0;
+        }
       }
     });
     document.addEventListener("touchend", function(e) {
@@ -3843,7 +3939,7 @@ function game_scene() {
   let game_view_text = new Text(canvas, [420, 605], window.game_view, "15px Arial", "black", false, false, "game-view");
   overlay2_objects.push(game_view_text);
   //settings cog
-  let settings_btn = new ImageButton(canvas, [160, 653], [65, 38], false, settingsImage, function(){console.log('settings button clicked')});
+  let settings_btn = new ImageButton(canvas, [160, 653], [65, 38], false, settingsImage, create_settings_modal);
   overlay2_objects.push(settings_btn);
 }
 
