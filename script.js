@@ -812,6 +812,8 @@ for (let r_num=0; r_num < Object.keys(regions_info).length; r_num++) {
   let l_desig = Object.keys(regions_info)[r_num];
   regions_info[l_desig].buildings = [];
   regions_info[l_desig].units = {};
+  //units of other nations on land not owned by nation (or not colonized yet by nation)
+  regions_info[l_desig].foreign_units = {};
   regions_info[l_desig].residence_tax = 2;
 }
 
@@ -827,6 +829,20 @@ let self_nation = {
   owned_regions: [],
   construction: [],
   recruitment: []
+};
+
+//units moving
+let unit_movements = {
+  /*example:
+  "move-id-0001": {
+    "type": "colonist",
+    "nation": "self",
+    "from": "45",
+    "to": "46",
+    "start": 104,
+    "end": 155
+  }
+  */
 };
 
 //development util functions
@@ -936,6 +952,8 @@ class Canvas {
     //modifications
     this.regions = [];
     this.sea = [];
+    //unit classes, which are just the images
+    this.units = [];
     this.scroll_temp_disabled = true;
     this.keydown_temp_disabled = true;
     this.click_temp_disabled = false;
@@ -993,7 +1011,13 @@ class Canvas {
         }
         for (let i=0; i < event_items.length; i++) {
           let component = event_items[i];
+          if (e.type === "click") {
+            console.log(i)
+          }
           component[event](e);
+        }
+        if (e.type === "contextmenu") {
+          return false;
         }
       }
       this.canvas.addEventListener(event, canvasEventHandler);
@@ -1400,7 +1424,6 @@ function toggleOverlay() {
     overlay2_objects.push(left_map_view);
     let right_map_view = new TextButton(canvas, [[528, 605], [[525, 590], [537, 607]]], "›", "25px Arial", false, "black", "black", false, false, false, function() {
       let current_index = window.game_views.indexOf(window.game_view);
-      console.log(current_index)
       current_index++;
       if (current_index === window.game_views.length) {
         current_index = 0;
@@ -1768,8 +1791,121 @@ class UnitCard {
   }
 }
 
+function move_unit() {
+  //
+}
+
 class Unit {
-  //picture of unit, like barbarian hordes, or to indicate military presence in region
+  //picture of unit, like barbarian hordes, or to indicate (military?) presence in region, also its clicks and stuff
+  constructor(canvas, region_desig, type, moving_id="") {
+    this.canvas = canvas;
+    //province desig
+    this.region_desig = region_desig;
+    //unit type
+    this.type = type;
+    this.moving_id = moving_id;
+    //for now, dont support multiple units in one group
+    if (this.type === "citizen") {
+      this.image = citizenImage;
+    } else if (this.type === "colonist") {
+      this.image = colonistImage;
+    } else if (this.type === "conscript") {
+      //or other military subtype
+      this.image = conscriptImage;
+    } else if (this.type === "merchant") {
+      this.image = merchantImage;
+    }
+    this.display = true;
+    this.clicked = false;
+    this.info_objs = [];
+    this.path = new Path2D();
+    //register for click and contextmenu
+    this.canvas.addEvent("click", this, false);
+    //this.canvas.addEvent("contextmenu", this, false);
+    this.canvas.units.push(this);
+    this.canvas.components.pushOrder(this, "mapIcon");
+  }
+  click(e) {
+    console.log(e)
+    //left (move) click means option to click on map, select region to move to
+    if (this.canvas.click_temp_disabled) {
+      return;
+    }
+    console.log('a')
+    if (this.canvas.context.isPointInPath(this.path, e.offsetX, e.offsetY) && !this.clicked && this.display) {
+      console.log('b')
+      toggleOverlay();
+      this.clicked = true;
+      //find amount of units
+      //
+    } else {
+      console.log('c')
+      if (!this.canvas.context.isPointInPath(window.game_overlay_transparent.get_path(), e.offsetX, e.offsetY)) {
+        return;
+      }
+      console.log('d')
+      if (this.clicked) {
+        toggleOverlay();
+      }
+      //this will also trigger if settlement clicked twice. this is intended behavior
+      this.clicked = false;
+      let self = this;
+      this.canvas.components = this.canvas.components.filter(function(value) {
+        return !self.info_objs.includes(value);
+      });
+      this.info_objs = [];
+    }
+  }
+  contextmenu(e) {
+    //find amount of units
+    //right click click means option to click on map, select unit to merge with/attack
+  }
+  remove() {
+    this.canvas.units = this.canvas.units.filter(function (item) {
+      return this !== item;
+    }, this);
+    this.canvas.components = this.canvas.components.filter(function (item) {
+      return this !== item;
+    }, this);
+  }
+  update() {
+    if (window.game_view !== "units" && this.display) {
+      this.display = false;
+    } else if (window.game_view === "units" && !this.display) {
+      this.display = true;
+    }
+    if (!this.display) return;
+    //calculate coords
+    let avg_p = findAveragePoint(this.region_desig);
+    let coords;
+    //the images are pretty big
+    if (this.type === "citizen") {
+      coords = [[avg_p[0]-30, avg_p[1]-30], [avg_p[0]+30, avg_p[1]+30]];
+    } else if (this.type === "colonist") {
+      coords = [[avg_p[0]-60, avg_p[1]-65], [avg_p[0]-5, avg_p[1]-0]];
+    } else if (this.type === "conscript") {
+      //or other military subtype
+      coords = [[avg_p[0]+15, avg_p[1]+0], [avg_p[0]+75, avg_p[1]+60]];
+    } else if (this.type === "merchant") {
+      coords = [[avg_p[0]-30, avg_p[1]+25], [avg_p[0]+30, avg_p[1]+85]];
+    }
+    //show unit icon
+    let mod_coords = scaleCoords(translateCoords(coords, window.gameTranslate), window.gameScaleFactor);
+    this.canvas.context.drawImage(this.image, mod_coords[0][0], mod_coords[0][1], mod_coords[1][0]-mod_coords[0][0], mod_coords[1][1]-mod_coords[0][1]);
+    //add path for onclick, make hit box smaller than image
+    let path = new Path2D();
+    //smaller path
+    let coords2 = [[coords[0][0]+14, coords[0][1]+2], [coords[1][0]-14, coords[1][1]-2]];
+    let mod_coords2 = scaleCoords(translateCoords(coords2, window.gameTranslate), window.gameScaleFactor);
+    path.moveTo(mod_coords2[0][0], mod_coords2[0][1]);
+    path.lineTo(mod_coords2[1][0], mod_coords2[0][1]);
+    path.lineTo(mod_coords2[1][0], mod_coords2[1][1]);
+    path.lineTo(mod_coords2[0][0], mod_coords2[1][1]);
+    path.lineTo(mod_coords2[0][0], mod_coords2[0][1]);
+    this.path = path;
+    //show line to destination if moving
+    //
+  }
 }
 
 class SeaTile {
@@ -2531,22 +2667,25 @@ function convert_units(desig, unit_name, into_unit_name, time) {
   }
 }
 
+let canvas = new Canvas([1200,700], "game-canvas");
+
 function add_to_units(desig, unit_name) {
   if (regions_info[desig].units[unit_name]) {
     regions_info[desig].units[unit_name] += 1;
   } else {
+    if (window.ticks > 0) {
+      new Unit(canvas, desig, unit_name);
+    }
     regions_info[desig].units[unit_name] = 1;
   }
 }
-
-let canvas = new Canvas([1200,700], "game-canvas");
-//12 fps
-//increase fps?
 
 //overlay path for game scene
 window.game_overlay_transparent = new OverlayTransparentPath([[24,541],[21,22],[1174,24],[1175,541],[870,542],[869,562],[806,563],[807,531],[664,527],[642,504],[657,473],[640,482],[642,456],[621,441],[615,430],[605,433],[606,442],[582,449],[578,469],[583,479],[569,473],[586,505],[554,531],[550,563],[355,563],[355,545]]);
 
 //requestAnimationFrame(canvas.update)
+//12 fps
+//increase fps?
 setInterval(function() {
   canvas.update();
 }, 1000/12);
@@ -3649,6 +3788,12 @@ function point_in_region(p, desig) {
         in_region = false;
       }
     }
+  } else if (window.game_view === "units") {
+    for (let i=0; i < canvas.units.length; i++) {
+      if (canvas.context.isPointInPath(canvas.units[i].path, p[0], p[1])) {
+        in_region = false;
+      }
+    }
   }
   return in_region;
 }
@@ -3911,6 +4056,18 @@ function game_scene() {
   //wealth and supply counters
   new Text(canvas, [930, 612], String(self_nation.supply), "25px Arial", "black", undefined, 90, "supply-counter");
   new Text(canvas, [1054, 612], String(self_nation.wealth), "25px Arial", "black", undefined, 90, "wealth-counter");
+  //starting units
+  //on first tick, show the units
+  for (let r_num=0; r_num < Object.keys(regions_info).length; r_num++) {
+    let region = regions_info[Object.keys(regions_info)[r_num]];
+    for (let u=0; u < Object.keys(region.units).length; u++) {
+      let unit_name = Object.keys(region.units)[u];
+      let unit_num = region.units[unit_name];
+      if (unit_num > 0) {
+        new Unit(canvas, Object.keys(regions_info)[r_num], unit_name);
+      }
+    }
+  }
   //starting building
   new Building(canvas, window.starting_region, "settlement");
   let happiness_display = new Text(canvas, [232, 685], "Happiness: 50%", "17px Arial", "black", false, 90, "happiness-display");
@@ -3927,7 +4084,6 @@ function game_scene() {
   overlay2_objects.push(left_map_view);
   let right_map_view = new TextButton(canvas, [[528, 605], [[525, 590], [537, 607]]], "›", "25px Arial", false, "black", "black", false, false, false, function() {
     let current_index = window.game_views.indexOf(window.game_view);
-    console.log(current_index)
     current_index++;
     if (current_index === window.game_views.length) {
       current_index = 0;
