@@ -255,7 +255,7 @@ let sea_info = {
   },
   "S28": {
     "coords": [[455,1295],[474,1290],[493,1268],[506,1254],[510,1270],[523,1296],[554,1315],[604,1334],[629,1358],[653,1384],[672,1417],[677,1439],[676,1453],[664,1468],[653,1477],[630,1477],[610,1481],[588,1482],[567,1481],[555,1469],[537,1457],[512,1460],[487,1461],[465,1442],[458,1442],[444,1449],[414,1465],[398,1473],[387,1476],[398,1465],[400,1457],[400,1449],[384,1438],[384,1431],[392,1416],[396,1383],[397,1367],[397,1332],[408,1306],[412,1292],[429,1299],[443,1300]],
-    "neighbors": ["S21", "S22", "S23", "S28", "99", "103", "104", "113","114"]
+    "neighbors": ["S21", "S22", "S23", "S28", "99", "103", "104", "113", "114"]
   },
   "S29": {
     "coords": [[726,1504],[745,1518],[770,1529],[796,1529],[805,1550],[816,1583],[819,1608],[819,1639],[813,1675],[798,1702],[784,1725],[767,1740],[737,1766],[698,1786],[653,1801],[616,1814],[584,1814],[543,1814],[522,1811],[541,1798],[556,1787],[567,1769],[572,1758],[580,1752],[598,1744],[631,1718],[644,1700],[660,1677],[660,1663],[651,1653],[644,1650],[646,1638],[658,1629],[676,1625],[683,1624],[700,1615],[716,1595],[731,1587],[741,1587],[752,1579],[753,1563],[750,1539],[742,1535],[712,1528],[688,1524],[680,1524],[669,1517],[668,1498],[671,1486],[670,1476],[683,1457],[685,1436],[704,1472]],
@@ -466,7 +466,7 @@ let regions_info = {
   },
   "32": {
     "coords": [[2159,704],[2168,695],[2179,689],[2189,687],[2207,679],[2233,673],[2234,671],[2245,671],[2255,666],[2265,663],[2272,660],[2279,657],[2287,654],[2299,657],[2307,664],[2313,677],[2317,685],[2319,696],[2317,712],[2312,730],[2308,732],[2301,743],[2289,753],[2274,759],[2267,763],[2253,772],[2243,778],[2235,786],[2234,779],[2233,769],[2230,757],[2225,743],[2210,725],[2192,711],[2179,708],[2165,708],[2159,707]],
-    "neighbors": ["31,", "33", "35", "S12", "S13"]
+    "neighbors": ["31", "33", "35", "S12", "S13"]
   },
   "33": {
     "coords": [[2400,714],[2400,859],[2382,859],[2361,859],[2349,860],[2335,864],[2325,868],[2307,874],[2283,887],[2262,904],[2255,911],[2249,919],[2247,917],[2246,908],[2237,903],[2229,896],[2211,887],[2194,879],[2189,879],[2185,875],[2178,873],[2179,869],[2189,858],[2196,851],[2213,827],[2217,819],[2227,808],[2241,794],[2250,788],[2252,784],[2277,771],[2298,761],[2306,754],[2312,746],[2328,737],[2347,726],[2367,719],[2381,715],[2391,713]],
@@ -839,8 +839,11 @@ let unit_movements = {
     "nation": "self",
     "from": "45",
     "to": "46",
+    "current": "46",
     "start": 104,
-    "end": 155
+    "end": 155,
+    "move_id": "move-id-0001",
+    "path": ["45", "46"]
   }
   */
 };
@@ -1011,9 +1014,6 @@ class Canvas {
         }
         for (let i=0; i < event_items.length; i++) {
           let component = event_items[i];
-          if (e.type === "click") {
-            console.log(i)
-          }
           component[event](e);
         }
         if (e.type === "contextmenu") {
@@ -1378,6 +1378,19 @@ function translateCoords(coords, translate) {
     new_coords.push([coords[i][0]-translate[0], coords[i][1]-translate[1]]);
   }
   return new_coords;
+}
+
+//clockwise
+function rotateCoord(coord, center, rad) {
+  //translate center to origin
+  let trans_coord = [coord[0]-center[0], coord[1]-center[1]];
+  //rotate
+  //x2 = x1 * cos theta - y1 * sin theta
+  //y2 = y1 * cos theta + x1 * sin theta
+  let rotated_coord = [Math.round(trans_coord[0]*Math.cos(rad) - trans_coord[1]*Math.sin(rad)), Math.round(trans_coord[1]*Math.cos(rad) + trans_coord[0]*Math.sin(rad))];
+  //translate center back to normal position
+  let retrans_coord = [rotated_coord[0]+center[0], rotated_coord[1]+center[1]];
+  return retrans_coord;
 }
 
 //find center point of a region
@@ -1791,6 +1804,45 @@ class UnitCard {
   }
 }
 
+//find shortest path from region to region, breadth
+function pathfind(from, to, sea=false) {
+  let checks = [[from]];
+  //30 layers
+  for (let i=0; i < 30; i++) {
+    for (let j=0; j < checks.length; j++) {
+      let edge = checks[j].slice(-1);
+      let neighbors = regions_info[edge].neighbors;
+      for (let n=0; n < neighbors.length; n++) {
+        let nn = neighbors[n];
+        if (nn === to) {
+          //
+        }
+        //
+      }
+    }
+  }
+  //remove
+  checks = checks.filter(function(item) {
+    return item.slice(-1) === to;
+  });
+  //find and return shortest
+  //
+}
+
+/*example:
+  "move-id-0001": {
+    "type": "colonist",
+    "nation": "self",
+    "from": "45",
+    "to": "46",
+    "current": "46",
+    "start": 104,
+    "end": 155,
+    "move_id": "move-id-0001",
+    "path": ["45", "46"]
+  }
+*/
+
 function move_unit() {
   //
 }
@@ -1826,24 +1878,23 @@ class Unit {
     this.canvas.components.pushOrder(this, "mapIcon");
   }
   click(e) {
-    console.log(e)
     //left (move) click means option to click on map, select region to move to
     if (this.canvas.click_temp_disabled) {
       return;
     }
-    console.log('a')
     if (this.canvas.context.isPointInPath(this.path, e.offsetX, e.offsetY) && !this.clicked && this.display) {
-      console.log('b')
       toggleOverlay();
       this.clicked = true;
+      let name = new Text(this.canvas, [370, 605], this.type, "18px Arial", "black", false, 180, undefined);
+      this.info_objs.push(name);
       //find amount of units
-      //
+      let unit_amount = regions_info[this.region_desig].units[this.type];
+      let amount_text = new Text(this.canvas, [370, 627], "Units: "+String(unit_amount), "12px Arial", "black", false, 180, undefined);
+      this.info_objs.push(amount_text);
     } else {
-      console.log('c')
       if (!this.canvas.context.isPointInPath(window.game_overlay_transparent.get_path(), e.offsetX, e.offsetY)) {
         return;
       }
-      console.log('d')
       if (this.clicked) {
         toggleOverlay();
       }
@@ -1869,6 +1920,16 @@ class Unit {
     }, this);
   }
   update() {
+    let movement_info = unit_movements[this.moving_id];
+    if (this.moving_id) {
+      //remove self if movement info disappears
+      if (!movement_info) {
+        this.remove();
+      }
+      if (movement_info.current !== this.region_desig) {
+        this.region_desig = movement_info.current;
+      }
+    }
     if (window.game_view !== "units" && this.display) {
       this.display = false;
     } else if (window.game_view === "units" && !this.display) {
@@ -1879,15 +1940,36 @@ class Unit {
     let avg_p = findAveragePoint(this.region_desig);
     let coords;
     //the images are pretty big
-    if (this.type === "citizen") {
-      coords = [[avg_p[0]-30, avg_p[1]-30], [avg_p[0]+30, avg_p[1]+30]];
-    } else if (this.type === "colonist") {
-      coords = [[avg_p[0]-60, avg_p[1]-65], [avg_p[0]-5, avg_p[1]-0]];
-    } else if (this.type === "conscript") {
-      //or other military subtype
-      coords = [[avg_p[0]+15, avg_p[1]+0], [avg_p[0]+75, avg_p[1]+60]];
-    } else if (this.type === "merchant") {
-      coords = [[avg_p[0]-30, avg_p[1]+25], [avg_p[0]+30, avg_p[1]+85]];
+    if (!this.moving_id) {
+      if (this.type === "citizen") {
+        coords = [[avg_p[0]-28, avg_p[1]-56], [avg_p[0]+28, avg_p[1]+0]];
+      } else if (this.type === "colonist") {
+        coords = [[avg_p[0]-61, avg_p[1]-28], [avg_p[0]-5, avg_p[1]+25]];
+      } else if (this.type === "conscript") {
+        //or other military subtype
+        coords = [[avg_p[0]+10, avg_p[1]-28], [avg_p[0]+66, avg_p[1]+28]];
+      } else if (this.type === "merchant") {
+        coords = [[avg_p[0]-28, avg_p[1]+2], [avg_p[0]+28, avg_p[1]+58]];
+      }
+    } else {
+      //calculate coords of moving unit
+      //find what other units are currently in province, then rotate
+      let base_center_coord = [avg_p[0], avg_p[1]-112];
+      let moving_in_region = unit_movements.filter(function(item) {
+        return item.current === this.region_desig;
+      });
+      let moving_index = moving_in_region.findIndex(function(item) {
+        return item.move_id === this.moving_id;
+      });
+      coords = rotateCoord(base_center_coord, avg_p, moving_index*Math.PI/4);
+    }
+    if (this.moving_id) {
+      //draw line from to destination
+      this.canvas.context.moveTo(...coords);
+      this.canvas.context.lineTo(...avg_p);
+      this.canvas.context.strokeStyle = "black";
+      this.canvas.context.lineWidth = 2;
+      this.canvas.context.stroke();
     }
     //show unit icon
     let mod_coords = scaleCoords(translateCoords(coords, window.gameTranslate), window.gameScaleFactor);
@@ -1903,8 +1985,6 @@ class Unit {
     path.lineTo(mod_coords2[0][0], mod_coords2[1][1]);
     path.lineTo(mod_coords2[0][0], mod_coords2[0][1]);
     this.path = path;
-    //show line to destination if moving
-    //
   }
 }
 
@@ -2470,6 +2550,22 @@ class Toggle {
   }
 }
 
+//instructions that appears when for example, unit left clicked on map. instructions would say "click any region to move unit there"
+class OverlayInstructions {
+  constructor(canvas, text, coords, color, background_color) {
+    this.canvas = canvas;
+    this.text = text;
+    //coords: [width, height]
+    this.coords = coords;
+    this.color = color;
+    this.background_color = background_color;
+    this.canvas.components.push(this);
+  }
+  update() {
+    //
+  }
+}
+
 //construction card for build menu. displays building name, description+benefits, image and cost
 class ConstructionCard {
   /**
@@ -2654,6 +2750,13 @@ function convert_units(desig, unit_name, into_unit_name, time) {
     }
     //remove from list
     regions_info[desig].units[unit_name] -= 1;
+    //remove unit from map
+    if (regions_info[desig].units[unit_name] === 0) {
+      let gone_unit = canvas.units.find(function(item) {
+        return item.region_desig === desig && item.type === unit_name && !item.moving_id;
+      });
+      gone_unit.remove();
+    }
     self_nation.recruitment.push({
       desig: desig,
       building: building_name,
@@ -2735,6 +2838,10 @@ function check_recruitment() {
       }
     }
   }
+}
+
+function check_movement() {
+  //
 }
 
 function check_construction() {
@@ -4008,22 +4115,18 @@ function game_scene() {
       //inside the view window, not on the overlay. ok to click
       if (canvas.context.isPointInPath(window.game_overlay_transparent.get_path(), e.offsetX, e.offsetY)) {
         if (canvas.context.isPointInPath(self.path, e.offsetX, e.offsetY)) {
-          //make sure its not in neighbors
-          /*
-          let cancel = false;
-          for (let i=0; i < sea_info[self.desig].neighbors.length; i++) {
-            let n_desig = sea_info[self.desig].neighbors[i];
-            if (!n_desig.startsWith("S")) {
-              if (point_in_region([e.offsetX, e.offsetY], n_desig)) {
-                cancel = true;
+          //make sure units take precedence over sea tiles
+          let in_region = true;
+          if (window.game_view === "units") {
+            for (let i=0; i < canvas.units.length; i++) {
+              if (canvas.context.isPointInPath(canvas.units[i].path, e.offsetX, e.offsetY)) {
+                in_region = false;
               }
             }
           }
-          if (!cancel) {
+          if (in_region) {
             create_sea_modal(self.desig);
           }
-          */
-          create_sea_modal(self.desig);
         }
       }
     }
