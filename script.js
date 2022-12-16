@@ -12,7 +12,7 @@ window.starting_region = undefined;
 window.ticks = 0;
 window.tick_interval_id = undefined;
 
-window.game_views = ["buildings", "units", "none"];
+window.game_views = ["buildings", "units", "markers", "none"];
 window.game_view = "buildings";
 
 window.move_ids = 0;
@@ -987,6 +987,7 @@ class Canvas {
     this.keydown_temp_disabled = true;
     this.click_temp_disabled = false;
     this.touchmove_temp_disabled = true;
+    this.move_mode = false;
   }
   update() {
     this.frame += 1;
@@ -1565,7 +1566,7 @@ class Building {
     }
     //onclick that adds info to bottom left panel, also stops region modal from opening.
     //maybe special cursor?
-    this.canvas.addEvent("click", this, false);
+    this.canvas.addEvent("click", [this], false);
     regions_info[this.region_desig].region_obj.buildings.push(this);
     this.canvas.components.pushOrder(this, "mapIcon");
   }
@@ -1831,12 +1832,26 @@ class UnitCard {
   }
 }
 
+function sea_accessible_only(desig) {
+  let non_sea = regions_info[desig].neighbors.findIndex(function(item) {
+    return !item.startsWith("S");
+  });
+  if (non_sea === -1) {
+    return true;
+  }
+  return false;
+}
+
 //find shortest path from region to region, breadth
 function pathfind(from, to, sea=false) {
+  //if region's only neighbors are sea provs, and unit can't cross sea... well obviously that region is not accessible
+  if (sea_accessible_only(to) && !sea) {
+    return;
+  }
   let checks = [[from]];
   let visited_edges = [];
-  //25 layers, but should end way quicker
-  for (let i=0; i < 25; i++) {
+  //19 layers, but should end way quicker
+  for (let i=0; i < 19; i++) {
     let checks_copy = checks;
     for (let j=0; j < checks_copy.length; j++) {
       let edge = checks_copy[j].slice(-1)[0];
@@ -1906,6 +1921,10 @@ function move_unit(nation, type, amount, desig, to, to_path=false, sea=false) {
   let mid = get_move_id();
   if (!to_path) {
     to_path = pathfind(desig, to);
+    //failed to generate path
+    if (!to_path) {
+      return false;
+    }
   }
   unit_movements[mid] = {
     "type": type,
@@ -1920,6 +1939,7 @@ function move_unit(nation, type, amount, desig, to, to_path=false, sea=false) {
     "path": to_path
   };
   new Unit(canvas, nation, desig, type, mid, false);
+  return true;
 }
 
 class Unit {
@@ -1947,13 +1967,85 @@ class Unit {
     }
     this.display = true;
     this.clicked = false;
+    this.move_amount = 0;
     this.info_objs = [];
     this.path = new Path2D();
     //register for click and contextmenu
-    this.canvas.addEvent("click", this, false);
+    this.canvas.addEvent("click", [this], false);
+    this.canvas.addEvent("customunitmove", [this], false);
     //this.canvas.addEvent("contextmenu", this, false);
     this.canvas.units.push(this);
     this.canvas.components.pushOrder(this, "mapIcon");
+  }
+  customunitmove(e) {
+    //canvas.canvas.dispatchEvent(new CustomEvent("customunitmove", {detail: {"dest": self.desig}}));
+    if (this.canvas.move_mode && this.clicked) {
+      //move
+      let dest_desig = e.detail.dest;
+      let success = move_unit(this.nation, this.type, this.move_amount, this.region_desig, dest_desig);
+      if (success) {
+        this.clicked = false;
+        this.canvas.move_mode = false;
+        //get rid of info objs
+        let self = this;
+        this.canvas.components = this.canvas.components.filter(function(value) {
+          return !self.info_objs.includes(value);
+        });
+        this.info_objs = [];
+        //remove unit
+        if (this.move_id) {
+          unit_movements[this.move_id].amount -= this.move_amount;
+          if (unit_movements[this.move_id].amount === 0) {
+            delete unit_movements[this.move_id];
+            //remove unit card
+            this.remove();
+          }
+        } else if (this.foreign) {
+          regions_info[this.region_desig].foreign_units[this.nation].numbers[this.type] -= this.move_amount;
+          if (regions_info[this.region_desig].foreign_units[this.nation].numbers[this.type] === 0) {
+            //remove unit card
+            this.remove();
+          }
+          for (let r=0; r < this.move_amount; r++) {
+            //todo: special logic if citizen has task?
+            let r_i = regions_info[this.region_desig].foreign_units[this.nation].unhoused.findIndex(function(item) {
+              return item.name === self.type;
+            });
+            let r_unhoused = regions_info[this.region_desig].foreign_units[this.nation].unhoused;
+            regions_info[this.region_desig].foreign_units[this.nation].unhoused = [...r_unhoused.slice(0,r_i), ...r_unhoused.slice(r_i+1)];
+          }
+        } else {
+          regions_info[this.region_desig].units[this.type] -= this.move_amount;
+          if (regions_info[this.region_desig].units[this.type] === 0) {
+            //remove unit card
+            this.remove();
+          }
+          let removed_count = 0;
+          //remove from housing
+          for (let b=0; b < regions_info[this.region_desig].buildings.length; b++) {
+            let building = regions_info[this.region_desig].buildings[b];
+            if (!building.homes) continue;
+            let b_h = JSON.parse(JSON.stringify(building.homes));
+            for (let u=0; u < b_h.length; u++) {
+              if (removed_count === this.move_amount) {
+                break;
+              }
+              if (b_h[u].name === this.type) {
+                //remove
+                let f_i = regions_info[this.region_desig].buildings[b].homes.findIndex(function(item) {
+                  return item.name === self.type;
+                });
+                regions_info[this.region_desig].buildings[b].homes.splice(f_i, 1);
+                removed_count++;
+              }
+            }
+            if (removed_count === this.move_amount) {
+              break;
+            }
+          }
+        }
+      }
+    }
   }
   click(e) {
     //left (move) click means option to click on map, select region to move to
@@ -1963,14 +2055,18 @@ class Unit {
     if (this.canvas.context.isPointInPath(this.path, e.offsetX, e.offsetY) && !this.clicked && this.display) {
       toggleOverlay();
       this.clicked = true;
+      this.canvas.move_mode = true;
       let name = new Text(this.canvas, [370, 605], this.type, "18px Arial", "black", false, 180, undefined);
       this.info_objs.push(name);
       //find amount of units
       let unit_amount = regions_info[this.region_desig].units[this.type];
       if (this.foreign) {
-        console.log(this.region_desig, this.nation)
         unit_amount = regions_info[this.region_desig].foreign_units[this.nation].numbers[this.type];
+      } else if (this.move_id) {
+        let movement_info = unit_movements[this.move_id];
+        unit_amount = movement_info.amount;
       }
+      this.move_amount = unit_amount;
       let amount_text = new Text(this.canvas, [370, 627], "Units: "+String(unit_amount), "12px Arial", "black", false, 180, undefined);
       this.info_objs.push(amount_text);
       let owner = this.nation;
@@ -1986,9 +2082,10 @@ class Unit {
         return;
       }
       if (this.clicked) {
+        this.canvas.move_mode = false;
         toggleOverlay();
       }
-      //this will also trigger if settlement clicked twice. this is intended behavior
+      //this will also trigger if unit clicked twice. this is intended behavior
       this.clicked = false;
       let self = this;
       this.canvas.components = this.canvas.components.filter(function(value) {
@@ -2002,6 +2099,10 @@ class Unit {
     //right click click means option to click on map, select unit to merge with/attack
   }
   remove() {
+    if (this.clicked) {
+      this.clicked = false;
+      this.canvas.move_mode = false;
+    }
     this.canvas.units = this.canvas.units.filter(function (item) {
       return this !== item;
     }, this);
@@ -4378,8 +4479,14 @@ function game_scene() {
         //inside the view window, not on the overlay. ok to click
         let in_region = point_in_region([e.offsetX, e.offsetY], self.desig);
         if (in_region) {
-          //open up region popup
-          create_region_modal(self.desig);
+          if (self.canvas.move_mode) {
+            //send event
+            canvas.canvas.dispatchEvent(new CustomEvent("customunitmove", {detail: {"dest": self.desig}}));
+            toggleOverlay();
+          } else {
+            //open up region popup
+            create_region_modal(self.desig);
+          }
         }
       }
     }
