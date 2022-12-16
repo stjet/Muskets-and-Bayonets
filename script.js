@@ -2176,7 +2176,7 @@ class Unit {
         let nation = Object.keys(foreign_u)[c_num];
         let nation_f_u = foreign_u[nation];
         if (nation === this.nation) {
-          f_index = Object.keys(nation_f_u).indexOf(nation_f_u.numbers[item.type])+f_count;
+          f_index = Object.keys(nation_f_u).indexOf(nation_f_u.numbers[this.type])+f_count;
         }
         f_count += Object.keys(nation_f_u.numbers).length;
       }
