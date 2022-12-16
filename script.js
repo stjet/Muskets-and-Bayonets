@@ -1982,6 +1982,19 @@ class Unit {
     if (this.canvas.move_mode && this.clicked) {
       //move
       let dest_desig = e.detail.dest;
+      if (this.region_desig === dest_desig) {
+        //every customunitmove event comes with a overlay toggle
+        //so we need to set clicked to false and clean everything up
+        //otherwise the overlay toggle in Unit's `click` will be triggered
+        this.clicked = false;
+        this.canvas.move_mode = false;
+        let self = this;
+        this.canvas.components = this.canvas.components.filter(function(value) {
+          return !self.info_objs.includes(value);
+        });
+        this.info_objs = [];
+        return;
+      }
       let success = move_unit(this.nation, this.type, this.move_amount, this.region_desig, dest_desig);
       if (success) {
         this.clicked = false;
@@ -2102,6 +2115,12 @@ class Unit {
     if (this.clicked) {
       this.clicked = false;
       this.canvas.move_mode = false;
+      toggleOverlay();
+      let self = this;
+      this.canvas.components = this.canvas.components.filter(function(value) {
+        return !self.info_objs.includes(value);
+      });
+      this.info_objs = [];
     }
     this.canvas.units = this.canvas.units.filter(function (item) {
       return this !== item;
@@ -2133,7 +2152,7 @@ class Unit {
     let coords;
     let center_coord;
     //the images are pretty big
-    if (!this.move_id) {
+    if (!this.move_id && !this.foreign) {
       if (this.type === "citizen") {
         coords = [[avg_p[0]-28, avg_p[1]-56], [avg_p[0]+28, avg_p[1]+0]];
       } else if (this.type === "colonist") {
@@ -3049,7 +3068,7 @@ function convert_units(desig, unit_name, into_unit_name, time) {
 let canvas = new Canvas([1200,700], "game-canvas");
 
 function add_to_units(desig, unit_name) {
-  if (regions_info[desig].units[unit_name]) {
+  if (regions_info[desig].units[unit_name] && regions_info[desig].units[unit_name] !== 0) {
     regions_info[desig].units[unit_name] += 1;
   } else {
     if (window.ticks > 0) {
@@ -3057,7 +3076,7 @@ function add_to_units(desig, unit_name) {
       if (self_nation.owned_regions.includes(desig)) {
         owner = "self";
       }
-      new Unit(canvas, owner, regions_info, desig, unit_name);
+      new Unit(canvas, owner, desig, unit_name);
     }
     regions_info[desig].units[unit_name] = 1;
   }
@@ -3161,6 +3180,7 @@ function check_movement() {
       //add it to the prov
       //if prov owner is self, find some housing
       let housed = false;
+      let homeless_remainder = 0;
       if (regions_info[mv_info.to]) {
         if (self_nation.owned_regions.includes(mv_info.to) && mv_info.nation === "self") {
           //try and find housing
@@ -3168,8 +3188,8 @@ function check_movement() {
             let building = regions_info[mv_info.to].buildings[j];
             if (building.homes) {
               if (buildings_info[building.type].ho > building.homes.length) {
-                add_to_units(mv_info.to, mv_info.type);
                 for (let a=0; a < mv_info.amount; a++) {
+                  add_to_units(mv_info.to, mv_info.type);
                   building.homes.push({
                     name: mv_info.type,
                     task: false,
@@ -3178,6 +3198,10 @@ function check_movement() {
                       building: building.type
                     }
                   });
+                  if (buildings_info[building.type].ho <= building.homes.length) {
+                    homeless_remainder = mv_info.amount-(a+1);
+                    break;
+                  }
                 }
                 housed = true;
                 break;
@@ -3187,7 +3211,7 @@ function check_movement() {
         }
       }
       //if not owner or if not housing, be foreign unit
-      if (!housed) {
+      if (!housed || homeless_remainder !== 0) {
         let r_fu = regions_info[mv_info.to].foreign_units;
         if (!r_fu[mv_info.nation]) {
           r_fu[mv_info.nation] = {
@@ -3195,7 +3219,11 @@ function check_movement() {
             "numbers": {}
           };
         }
-        for (let a=0; a < mv_info.amount; a++) {
+        let homeless_amount = mv_info.amount;
+        if (homeless_remainder) {
+          homeless_amount = homeless_remainder;
+        }
+        for (let a=0; a < homeless_amount; a++) {
           regions_info[mv_info.to].foreign_units[mv_info.nation].unhoused.push({
             name: mv_info.type,
             task: false,
@@ -4482,6 +4510,7 @@ function game_scene() {
           if (self.canvas.move_mode) {
             //send event
             canvas.canvas.dispatchEvent(new CustomEvent("customunitmove", {detail: {"dest": self.desig}}));
+            //every customunitmove event results in an overlay toggle
             toggleOverlay();
           } else {
             //open up region popup
