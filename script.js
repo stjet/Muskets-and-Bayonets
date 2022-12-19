@@ -1213,6 +1213,7 @@ class ImageButton {
     this.image_url = image_url;
     this.image = image;
     this.click = function(e) {
+      if (this.canvas.click_temp_disabled) return;
       //check if within coords
       if ((e.offsetX > this.coords[0] && e.offsetX < this.coords[0]+this.size[0]) && (e.offsetY > this.coords[1] && e.offsetY < this.coords[1]+this.size[1])) {
         onclick(self);
@@ -1832,6 +1833,33 @@ class UnitCard {
   }
 }
 
+//region must be adjacent to already owned land, or adjacent to ocean
+function colonizable(nation, desig) {
+  let d_neighbors = regions_info[desig].neighbors;
+  for (let d=0; d < d_neighbors.length; d++) {
+    if (d_neighbors[d].startsWith("S")) {
+      return true;
+    }
+  }
+  let borders = [];
+  let owned;
+  if (nation === "self") {
+    owned = self_nation.owned_regions;
+  }
+  for (let i=0; i < owned.length; i++) {
+    let neighbors = regions_info[owned[i]].neighbors;
+    for (let j=0; j < neighbors.length; j++) {
+      if (!borders.includes(neighbors[j])) {
+        borders.push(neighbors[j]);
+      }
+    }
+  }
+  if (borders.includes(desig)) {
+    return true;
+  }
+  return false;
+}
+
 function sea_accessible_only(desig) {
   let non_sea = regions_info[desig].neighbors.findIndex(function(item) {
     return !item.startsWith("S");
@@ -2068,7 +2096,6 @@ class Unit {
     if (this.canvas.context.isPointInPath(this.path, e.offsetX, e.offsetY) && !this.clicked && this.display) {
       toggleOverlay();
       this.clicked = true;
-      this.canvas.move_mode = true;
       let name = new Text(this.canvas, [370, 605], this.type, "18px Arial", "black", false, 180, undefined);
       this.info_objs.push(name);
       //find amount of units
@@ -2088,8 +2115,19 @@ class Unit {
       }
       let owner_text = new Text(this.canvas, [370, 640], "Owner: "+owner, "12px Arial", "black", false, 180, undefined);
       this.info_objs.push(owner_text);
-      let instructions = new OverlayInstructions(canvas, "You are in Move mode. Left click destination to move unit.", [600, 44], "20px Arial", "white", "green");
-      this.info_objs.push(instructions);
+      if (this.type === "colonist" && this.nation === "self" && !this.moving_id) {
+        //check if current region is colonizable, add colonization button
+        if (colonizable(this.nation, this.region_desig)) {
+          let colonize = new TextButton(canvas, [[230, 651], [[227, 632], [327, 657]]], "Colonize", "12px Arial", false, "black", "#041616", false, false, false, function(self) {});
+          this.info_objs.push(colonize);
+        }
+      }
+      //don't let the player move the units of other nations... obviously
+      if (this.nation === "self") {
+        this.canvas.move_mode = true;
+        let instructions = new OverlayInstructions(canvas, "You are in Move mode. Left click destination to move unit.", [600, 44], "20px Arial", "white", "green");
+        this.info_objs.push(instructions);
+      }
     } else {
       if (!this.canvas.context.isPointInPath(window.game_overlay_transparent.get_path(), e.offsetX, e.offsetY)) {
         return;
@@ -2244,7 +2282,45 @@ class Unit {
     path.lineTo(mod_coords2[0][0], mod_coords2[1][1]);
     path.lineTo(mod_coords2[0][0], mod_coords2[0][1]);
     this.path = path;
+    //small rectangle below representing unit size and country
+    if (window.gameScaleFactor <= 1.6) {
+      let color;
+      if (this.nation === "self") {
+        color = self_nation.color;
+      }
+      let unit_amount = regions_info[this.region_desig].units[this.type];
+      if (this.foreign) {
+        unit_amount = regions_info[this.region_desig].foreign_units[this.nation].numbers[this.type];
+      } else if (this.move_id) {
+        let movement_info = unit_movements[this.move_id];
+        unit_amount = movement_info.amount;
+      }
+      let bar_width = unit_amount*5;
+      //max width of 40
+      if (bar_width > 40) {
+        bar_width = 40;
+      }
+      bar_width = Math.round(bar_width*1/window.gameScaleFactor);
+      let bar_height = 5;
+      bar_height = Math.round(bar_height*1/window.gameScaleFactor);
+      let rect_path = new Path2D();
+      let rect_x = Math.round((mod_coords2[1][0]+mod_coords2[0][0])/2-bar_width/2);
+      rect_path.rect(rect_x, mod_coords2[1][1]+2, bar_width, bar_height);
+      let rect_color = "white";
+      if (this.nation === "self") {
+        rect_color = self_nation.color;
+      }
+      this.canvas.context.fillStyle = rect_color;
+      this.canvas.context.fill(rect_path);
+      this.canvas.context.lineWidth = 1;
+      this.canvas.context.strokeStyle = "black";
+      this.canvas.context.stroke(rect_path);
+    }
   }
+}
+
+class Marker {
+  //
 }
 
 class SeaTile {
@@ -2375,6 +2451,37 @@ class OverlayTransparentPath {
   }
 }
 
+//a little rectangle thing that will indicate whether time is paused, normal, sped up
+class SpeedSelected {
+  /**
+   * @param {Canvas} canvas 
+   * @param {string} speed 
+   */
+  constructor(canvas, speed) {
+    this.canvas = canvas;
+    this.speed = speed;
+    this.canvas.components.push(this);
+  }
+  update() {
+    let coords;
+    if (this.speed === "pause") {
+      coords = [[669,533],[672,541],[674,551],[675,555],[676,563],[699,562],[700,534]];
+    } else if (this.speed === "normal") {
+      coords = [[698,534],[698,563],[725,562],[725,535],[724,534]];
+    } else if (this.speed === "fast") {
+      coords = [[723,534],[723,562],[762,562],[763,534]];
+    }
+    let path = new Path2D();
+    path.moveTo(...coords[0]);
+    for (let i=1; i < coords.length; i++) {
+      path.lineTo(...coords[i]);
+    }
+    path.lineTo(...coords[0]);
+    this.canvas.context.fillStyle = "rgba(255, 255, 0, 0.4)";
+    this.canvas.context.fill(path);
+  }
+}
+
 class Text {
   /**
    * @param {Canvas} canvas
@@ -2452,6 +2559,73 @@ class Text {
         this.canvas.context.shadowBlur = 0;
         this.canvas.context.lineWidth = 1;
       }
+    }
+  }
+}
+
+//instead of one line of text, take in any amount of text
+//generate as many lines as needed and have consistent line lengths
+//will be used to improve the help page
+class Paragraph {
+  /**
+   * @param {Canvas} canvas
+   * @param {string} text
+   * @param {string} text_info
+   * @param {string} text_color
+   * @param {number[]} coord
+   * @param {number} max_width
+   * @param {bool} identity
+   */
+  constructor(canvas, text, text_info, text_color, coord, max_width, identity) {
+    this.canvas = canvas;
+    this.text = text;
+    this.text_info = text_info;
+    this.text_color = text_color;
+    this.coord = coord;
+    this.max_width = max_width;
+    this.identity = identity;
+    if (this.identity) {
+      this.canvas.addEvent("customtextchange", [this], false);
+    }
+    //sets this.lines
+    this.calculate_lines();
+    this.canvas.components.push(this);
+  }
+  calculate_lines() {
+    let lines = [];
+    let line = "";
+    this.canvas.context.font = this.text_info;
+    let words = this.text.split(" ");
+    for (let w=0; w < words.length; w++) {
+      line += words[w];
+      let width = this.canvas.context.measureText(line).width;
+      if (width > this.max_width) {
+        //remove last word
+        line = line.split(" ").slice(0, -1).join(" ");
+        lines.push(line);
+        line = words[w];
+      }
+      if (w === words.length-1) {
+        lines.push(line);
+        break;
+      }
+      line += " ";
+    }
+    this.lines = lines;
+  }
+  customtextchange(text_obj) {
+    if (text_obj.detail[this.identity] !== undefined && text_obj.detail[this.identity] !== false) {
+      this.text = text_obj.detail[this.identity];
+      this.calculate_lines();
+    }
+  }
+  update() {
+    let text_height = Number(this.text_info.split("px")[0]);
+    for (let l=0; l < this.lines.length; l++) {
+      let line = this.lines[l];
+      this.canvas.context.font = this.text_info;
+      this.canvas.context.fillStyle = this.text_color;
+      this.canvas.context.fillText(line, this.coord[0], this.coord[1] + (text_height+2)*l, this.max_width);
     }
   }
 }
@@ -3523,17 +3697,22 @@ function game_help_button() {
   window.open("/?go_to=help", '_blank');
 }
 
+let speed_selected_indicator;
+
 function game_pause_button() {
+  speed_selected_indicator.speed = "pause";
   clearInterval(window.tick_interval_id);
   window.tick_interval_id = undefined;
 }
 
 function fast_forward_button() {
+  speed_selected_indicator.speed = "fast";
   clearInterval(window.tick_interval_id);
   window.tick_interval_id = setInterval(tick, 167);
 }
 
 function normal_speed_button() {
+  speed_selected_indicator.speed = "normal";
   clearInterval(window.tick_interval_id);
   window.tick_interval_id = setInterval(tick, 667);
 }
@@ -4540,6 +4719,18 @@ function game_scene() {
                 in_region = false;
               }
             }
+          } else if (window.game_view === "buildings") {
+            for (let r=0; r < Object.keys(regions_info).length; r++) {
+              let r_desig = Object.keys(regions_info)[r];
+              //only check if region is neighbor
+              if (sea_info[self.desig].neighbors.includes(r_desig)) {
+                for (let b=0; b < regions_info[r_desig].buildings.length; b++) {
+                  if (canvas.context.isPointInPath(regions_info[r_desig].region_obj.buildings[b].path, e.offsetX, e.offsetY)) {
+                    in_region = false;
+                  }
+                }
+              }
+            }
           }
           if (in_region) {
             create_sea_modal(self.desig);
@@ -4622,6 +4813,7 @@ function game_scene() {
   //settings cog
   let settings_btn = new ImageButton(canvas, [160, 653], [65, 38], false, settingsImage, create_settings_modal);
   overlay2_objects.push(settings_btn);
+  speed_selected_indicator = new SpeedSelected(canvas, "normal");
 }
 
 /**
@@ -4784,20 +4976,22 @@ function start_scene() {
 
 function help_scene() {
   const help_info = [
-    {"title": "Welcome!", "content": "Muskets and Bayonets is a real time grand strategy game set in the early gunpowder era.", "content2": ""},
-    {"title": "Nation Selection", "content": "Click 'Play', and click a region to start in. Then, enter in name, slogan, and color.", "content2": ""},
-    {"title": "Mobile Support", "content": "Very good mobile support is offered. Clicking, inputting, and dragging to move all work.", "content2": ""},
-    {"title": "Map Controls", "content": "Arrow keys or WASD moves the map. Scroll wheel zooms the map in and out.", "content2": "Pressing shift and any of the WASD keys at the same time increases camera speed."},
-    {"title": "Wealth", "content": "Wealth is gotten in a couple different ways. Used for construction, unit upkeep, and more.", "content2": ""},
-    {"title": "Residence Tax", "content": "Citizens living in a region pay the region's tax rate every 90 days (1 season).", "content2": "More citizens, more tax. Setting the tax rate too high will decrease happiness."},
-    {"title": "Happiness", "content": "Many factors can affect happiness. Happiness can result in benefits and positive events,", "content2": "or detriments and negative events."},
-    {"title": "Recruiting", "content": "Citizens can be converted into other units. However, if they are assigned to a task,", "content2": "they cannot be converted. Other units can also be deconverted into citizens."},
-    {"title": "Units", "content": "", "content2": ""},
-    {"title": "Units: Citizens", "content": "Citizens are the core of any nation, they can do tasks, produce revenue,", "content2": "and easily be converted into other unit types."},
+    {"title": "Welcome!", "content": "Muskets and Bayonets is a real time grand strategy game set in the early gunpowder era."},
+    {"title": "Nation Selection", "content": "Click 'Play', and click a region to start in. Then, enter in name, slogan, and color."},
+    {"title": "Mobile Support", "content": "Very good mobile support is offered. Clicking, inputting, and dragging to move all work."},
+    {"title": "Map Controls", "content": "Arrow keys or WASD moves the map. Scroll wheel zooms the map in and out. Pressing shift and any of the WASD keys at the same time increases camera speed."},
+    {"title": "Wealth", "content": "Wealth is gotten in a couple different ways. Used for construction, unit upkeep, and more."},
+    {"title": "Residence Tax", "content": "Citizens living in a region pay the region's tax rate every 90 days (1 season). More citizens, more tax. Setting the tax rate too high will decrease happiness."},
+    {"title": "Happiness", "content": "Many factors can affect happiness. Happiness can result in benefits and positive events, or detriments and negative events."},
+    {"title": "Recruiting", "content": "Click on an owned region, and go to the 'Units' tab to recruit units. Citizens can be converted into other units. However, if they are assigned to a task, they cannot be converted. Other units can also be deconverted into citizens."},
+    {"title": "Units", "content": ""},
+    {"title": "Moving", "content": "Left click one of your units, and left click the destination region in order to move the unit."},
+    {"title": "Units: Citizens", "content": "Citizens are the core of any nation, they can do tasks, produce revenue, and easily be converted into other unit types."},
+    {"title": "Units: Colonists", "content": "Colonists are necessary to colonize unclaimed land. Only regions adjacent to owned land, or regions next to sea tiles can be colonized."},
     //other units...
-    {"title": "Buildings", "content": "Each settlement can have one building of each chain. Buildings can produce units, resources,", "content2": "and provide other benefits. They take time to build, as well as supply and wealth to build."},
-    {"title": "Buildings: Settlement", "content": "The settlement building and it's upgrades can house units, and slowly produce citizens.", "content2": ""},
-    {"title": "Buildings: Farms", "content": "Farms and it's upgrades produce supply, when citizens are assigned to it.", "content2": "The more citizens assigned to the farm, the more supply it produces."}
+    {"title": "Buildings", "content": "Each settlement can have one building of each chain. Buildings can produce units, resources, and provide other benefits. They take time to build, as well as supply and wealth to build."},
+    {"title": "Buildings: Settlement", "content": "The settlement building and it's upgrades can house units, and slowly produce citizens."},
+    {"title": "Buildings: Farms", "content": "Farms and it's upgrades produce supply, when citizens are assigned to it. The more citizens assigned to the farm, the more supply it produces."}
     //other buildings...
   ];
   canvas.reset();
@@ -4827,8 +5021,7 @@ function help_scene() {
   });
   //help text
   new Text(canvas, [canvas.canvas.width/2-150, 250], help_info[window.helpIndex].title, "50px Arial", "black", false, 690, "title");
-  new Text(canvas, [canvas.canvas.width/2-330, 350], help_info[window.helpIndex].content, "21px Arial", "black", false, 690, "content");
-  new Text(canvas, [canvas.canvas.width/2-330, 377], help_info[window.helpIndex].content2, "21px Arial", "black", false, 690, "content2");
+  new Paragraph(canvas, help_info[window.helpIndex].content, "21px Arial", "black", [canvas.canvas.width/2-330, 350], 690, "content")
 }
 
 function credit_scene() {
@@ -4838,7 +5031,7 @@ function credit_scene() {
   //credits
   new Link(canvas, "https://prussia.dev", [400, 250], "Prussia", "35px Arial", "black", "blue", true);
   new Link(canvas, "https://search.aol.com/aol/search?q=nnomtnert", [canvas.canvas.width-500, 250], "Nnomtnert", "35px Arial", "black", "blue", true);
-  new Text(canvas, [325, 500], "Also thanks to Affinity (start page artist) and the Arvaldians. Fonts used: Canterbury, Arial", "18px Arial", "black", false, 610, undefined);
+  new Paragraph(canvas, "Also thanks to Affinity (start page artist) and the Arvaldians. Huge thanks to maschek.hu for making a great image mapping tool. Fonts used: Canterbury, Arial", "18px Arial", "black", [325, 475], 610, undefined);
 }
 
 start_scene();
