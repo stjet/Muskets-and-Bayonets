@@ -17,6 +17,8 @@ window.game_view = "buildings";
 
 window.move_ids = 0;
 
+const UNHOUSED_UPKEEP_MULT = 2;
+
 const buildings_info = {
   "settlement": {
     //cost is in wealth and supply
@@ -130,25 +132,52 @@ const buildings_info = {
   }
 };
 
-//convert_into is days to convert other unit into that type, speed is days per region
+//convert_into is days to convert other unit into that type, speed is days per region, base upkeep is per half season (45 days) but calculated every 15 days
 const units_info = {
   "citizen": {
     "convert_into": 20,
-    "speed": 30
+    "speed": 30,
+    "base_upkeep": {
+      "supply": 1,
+      "wealth": 0
+    }
   },
   "colonist": {
     "convert_into": 40,
-    "speed": 30
+    "speed": 30,
+    "base_upkeep": {
+      "supply": 0.5,
+      "wealth": 0
+    }
   },
   "conscript": {
     "convert_into": 60,
-    "speed": 30
+    "speed": 30,
+    "base_upkeep": {
+      "supply": 1,
+      "wealth": 0.5
+    }
   },
   "merchant": {
     "convert_into": 80,
-    "speed": 30
+    "speed": 30,
+    "base_upkeep": {
+      "supply": 1,
+      "wealth": 0
+    }
   }
 };
+
+//break events into sections
+let events = [
+  {
+    name: "",
+    type: "tutorial",
+    text: "",
+    choices: [{}],
+    requirements: [],
+  }
+];
 
 //sea tiles
 let sea_info = {
@@ -840,6 +869,7 @@ for (let r_num=0; r_num < Object.keys(regions_info).length; r_num++) {
   */
   regions_info[l_desig].foreign_units = {};
   regions_info[l_desig].residence_tax = 2;
+  regions_info[l_desig].owner = "";
 }
 
 //player's nation
@@ -849,11 +879,12 @@ let self_nation = {
   color: "",
   land_tax: 2,
   wealth: 50,
-  supply: 50,
+  supply: 60,
   happiness: 0,
   owned_regions: [],
   construction: [],
-  recruitment: []
+  recruitment: [],
+  colonization: []
 };
 
 //units moving
@@ -886,6 +917,11 @@ function jumble_to_points(jumble) {
     points.push([jumble[i*2], jumble[i*2+1]]);
   }
   return JSON.stringify(points);
+}
+
+function super_mega_fast_forward() {
+  clearInterval(window.tick_interval_id);
+  window.tick_interval_id = setInterval(tick, 50);
 }
 
 class Point {
@@ -1539,7 +1575,7 @@ class Building {
     this.canvas = canvas;
     this.region_desig = region_desig;
     this.building_name = building_name;
-    this.path = undefined;
+    this.path = new Path2D();
     this.clicked = false;
     this.display = true;
     //text classes and what not that appear in panel on click of building
@@ -1995,6 +2031,7 @@ class Unit {
     }
     this.display = true;
     this.clicked = false;
+    this.unit_amount = 0;
     this.move_amount = 0;
     this.info_objs = [];
     this.path = new Path2D();
@@ -2010,7 +2047,7 @@ class Unit {
     if (this.canvas.move_mode && this.clicked) {
       //move
       let dest_desig = e.detail.dest;
-      if (this.region_desig === dest_desig) {
+      if ((this.region_desig === dest_desig && !this.foreign && !this.move_id) || this.move_amount === 0) {
         //every customunitmove event comes with a overlay toggle
         //so we need to set clicked to false and clean everything up
         //otherwise the overlay toggle in Unit's `click` will be triggered
@@ -2043,7 +2080,8 @@ class Unit {
           }
         } else if (this.foreign) {
           regions_info[this.region_desig].foreign_units[this.nation].numbers[this.type] -= this.move_amount;
-          if (regions_info[this.region_desig].foreign_units[this.nation].numbers[this.type] === 0) {
+          //is zero or undefined
+          if (!regions_info[this.region_desig].foreign_units[this.nation].numbers[this.type]) {
             //remove unit card
             this.remove();
           }
@@ -2071,10 +2109,13 @@ class Unit {
               if (removed_count === this.move_amount) {
                 break;
               }
+              if (b_h[u].task) {
+                continue;
+              }
               if (b_h[u].name === this.type) {
                 //remove
                 let f_i = regions_info[this.region_desig].buildings[b].homes.findIndex(function(item) {
-                  return item.name === self.type;
+                  return item.name === self.type && !item.task;
                 });
                 regions_info[this.region_desig].buildings[b].homes.splice(f_i, 1);
                 removed_count++;
@@ -2104,9 +2145,29 @@ class Unit {
         unit_amount = regions_info[this.region_desig].foreign_units[this.nation].numbers[this.type];
       } else if (this.move_id) {
         let movement_info = unit_movements[this.move_id];
-        unit_amount = movement_info.amount;
+        if (!movement_info) {
+          unit_amount = 0;
+        } else {
+          unit_amount = movement_info.amount;
+        }
       }
+      this.unit_amount = unit_amount;
       this.move_amount = unit_amount;
+      if (!this.foreign && !this.move_id) {
+        //make sure the units don't have tasks, make them unmovable if so
+        regions_info[this.region_desig].buildings
+        for (let b=0; b < regions_info[this.region_desig].buildings.length; b++) {
+          let building = regions_info[this.region_desig].buildings[b];
+          if (!building.homes) continue;
+          for (let u=0; u < building.homes.length; u++) {
+            let housed_unit = building.homes[u];
+            if (housed_unit.name === this.type && housed_unit.task) {
+              //remove one from move_amount
+              this.move_amount -= 1;
+            }
+          }
+        }
+      }
       let amount_text = new Text(this.canvas, [370, 627], "Units: "+String(unit_amount), "12px Arial", "black", false, 180, undefined);
       this.info_objs.push(amount_text);
       let owner = this.nation;
@@ -2115,6 +2176,8 @@ class Unit {
       }
       let owner_text = new Text(this.canvas, [370, 640], "Owner: "+owner, "12px Arial", "black", false, 180, undefined);
       this.info_objs.push(owner_text);
+      let moveable_text = new Text(this.canvas, [370, 653], "Movable: "+String(this.move_amount)+"/"+String(this.unit_amount), "12px Arial", "black", false, 180, undefined);
+      this.info_objs.push(moveable_text);
       if (this.type === "colonist" && this.nation === "self" && !this.moving_id) {
         //check if current region is colonizable, add colonization button
         if (colonizable(this.nation, this.region_desig)) {
@@ -2258,17 +2321,27 @@ class Unit {
     }
     //show unit icon
     let mod_coords = scaleCoords(translateCoords(coords, window.gameTranslate), window.gameScaleFactor);
-    if (this.clicked && window.settings.gradient) {
-      let circle_path = new Path2D();
+    if (this.clicked) {
       let center_x = Math.round((mod_coords[0][0]+mod_coords[1][0])/2);
       let center_y = Math.round((mod_coords[0][1]+mod_coords[1][1])/2);
-      circle_path.arc(center_x, center_y, Math.floor(35*1/window.gameScaleFactor), 0, 2*Math.PI);
-      let rad_grad = this.canvas.context.createRadialGradient(center_x, center_y, 0, center_x, center_y, Math.floor(26*1/window.gameScaleFactor));
-      rad_grad.addColorStop(0, "yellow");
-      rad_grad.addColorStop(0.7, "yellow");
-      rad_grad.addColorStop(1, "rgba(0,0,0,0)");
-      this.canvas.context.fillStyle = rad_grad;
-      this.canvas.context.fill(circle_path);
+      //glow around selected unit
+      if (window.settings.gradient) {
+        let circle_path = new Path2D();
+        circle_path.arc(center_x, center_y, Math.floor(35*1/window.gameScaleFactor), 0, 2*Math.PI);
+        let rad_grad = this.canvas.context.createRadialGradient(center_x, center_y, 0, center_x, center_y, Math.floor(26*1/window.gameScaleFactor));
+        rad_grad.addColorStop(0, "yellow");
+        rad_grad.addColorStop(0.7, "yellow");
+        rad_grad.addColorStop(1, "rgba(0,0,0,0)");
+        this.canvas.context.fillStyle = rad_grad;
+        this.canvas.context.fill(circle_path);
+      }
+      //yellow line that indicates what region the selected unit is in
+      let region_line = new Path2D();
+      region_line.moveTo(center_x, center_y);
+      region_line.lineTo(...scaleCoords(translateCoords([avg_p], window.gameTranslate), window.gameScaleFactor)[0]);
+      this.canvas.context.strokeStyle = "yellow";
+      this.canvas.context.lineWidth = 2;
+      this.canvas.context.stroke(region_line);
     }
     this.canvas.context.drawImage(this.image, mod_coords[0][0], mod_coords[0][1], mod_coords[1][0]-mod_coords[0][0], mod_coords[1][1]-mod_coords[0][1]);
     //add path for onclick, make hit box smaller than image
@@ -3246,10 +3319,7 @@ function add_to_units(desig, unit_name) {
     regions_info[desig].units[unit_name] += 1;
   } else {
     if (window.ticks > 0) {
-      let owner = "";
-      if (self_nation.owned_regions.includes(desig)) {
-        owner = "self";
-      }
+      let owner = regions_info[desig].owner;
       new Unit(canvas, owner, desig, unit_name);
     }
     regions_info[desig].units[unit_name] = 1;
@@ -3346,17 +3416,22 @@ function check_movement() {
     let dur = mv_info.end-mv_info.start;
     let prog = window.ticks-mv_info.start;
     let current_r = mv_info.path[Math.floor(prog/dur*mv_info.path.length)];
+    if (dur === 0) {
+      current_r = mv_info.to;
+    }
     if (mv_info.current !== current_r) {
       unit_movements[Object.keys(unit_movements)[i]].current = current_r;
     }
-    if (window.ticks === mv_info.end) {
+    //we use >= and not === because in the situation a foreign unit is moving in to housing, it starts and ends at the same tick
+    //so we want to make sure the movement ends in the next tick, because not possible to end the same tick due to order of functions called
+    if (window.ticks >= mv_info.end) {
       delete unit_movements[Object.keys(unit_movements)[i]];
       //add it to the prov
       //if prov owner is self, find some housing
       let housed = false;
       let homeless_remainder = 0;
       if (regions_info[mv_info.to]) {
-        if (self_nation.owned_regions.includes(mv_info.to) && mv_info.nation === "self") {
+        if (regions_info[mv_info.to].owner === "self" && mv_info.nation === "self") {
           //try and find housing
           for (let j=0; j < regions_info[mv_info.to].buildings.length; j++) {
             let building = regions_info[mv_info.to].buildings[j];
@@ -3524,9 +3599,48 @@ function calculate_happiness() {
   canvas.canvas.dispatchEvent(new CustomEvent("customtextchange", {detail: {"happiness-display": "Happiness: "+String(self_nation.happiness)+"%"}}));
 }
 
+//UNHOUSED_UPKEEP_MULT
 //subtract supply for units, and subtract even more for units that are moving, unhoused
 function upkeep() {
-  //
+  //should use .values() instead but w/e
+  for (let r=0; r < Object.keys(regions_info).length; r++) {
+    let r_info = regions_info[Object.keys(regions_info)[r]];
+    if (!r_info.owner) continue;
+    //check housed units
+    for (let h=0; h < Object.keys(r_info.units).length; h++) {
+      let h_name = Object.keys(r_info.units)[h];
+      let h_quant = r_info.units[h_name];
+      if (r_info.owner === "self") {
+        self_nation.wealth -= units_info[h_name].base_upkeep.wealth*h_quant/3;
+        self_nation.supply -= units_info[h_name].base_upkeep.supply*h_quant/3;
+      }
+    }
+    //check foreign units
+    //cpp. haha
+    for (let c=0; c < Object.keys(r_info.foreign_units).length; c++) {
+      let n_name = Object.keys(r_info.foreign_units)[c];
+      //loop through that country's units
+      let unit_numbers = r_info.foreign_units[n_name].numbers;
+      for (let cu=0; cu < Object.keys(unit_numbers).length; cu++) {
+        let n_unit_name = Object.keys(unit_numbers)[cu];
+        let n_unit_num = unit_numbers[n_unit_name];
+        if (n_name === "self") {
+          self_nation.wealth -= units_info[n_unit_name].base_upkeep.wealth*n_unit_num*UNHOUSED_UPKEEP_MULT/3;
+          self_nation.supply -= units_info[n_unit_name].base_upkeep.supply*n_unit_num*UNHOUSED_UPKEEP_MULT/3;
+        }
+      }
+    }
+  }
+  //check moving units
+  for (let m=0; m < Object.keys(unit_movements).length; m++) {
+    //move id
+    let mid = Object.keys(unit_movements)[m];
+    let m_info = unit_movements[mid];
+    if (m_info.nation === "self") {
+      self_nation.wealth -= units_info[m_info.type].base_upkeep.wealth*m_info.amount*UNHOUSED_UPKEEP_MULT/3;
+      self_nation.supply -= units_info[m_info.type].base_upkeep.supply*m_info.amount*UNHOUSED_UPKEEP_MULT/3;
+    }
+  }
 }
 
 function residence_tax_payment(pay_period) {
@@ -3667,7 +3781,8 @@ function tick() {
   if (window.ticks%5 === 0) {
     calculate_happiness();
   }
-  if (window.ticks%5 === 0) {
+  //once every 15 days, but upkeep amounts are every half season (45 days)
+  if (window.ticks%15 === 0) {
     upkeep();
   }
   canvas.canvas.dispatchEvent(new CustomEvent("customtextchange", {detail: {"wealth-counter": Math.floor(self_nation.wealth)}}));
@@ -3784,7 +3899,7 @@ function get_buildable_buildings(desig) {
  * @param {string} desig
  */
 function create_region_modal(desig, options) {
-  let player_owned_region = self_nation.owned_regions.includes(desig);
+  let player_owned_region = regions_info[desig].owner === "self";
   let region_obj = regions_info[desig];
   //actual modal
   let region_modal = new Modal(canvas, [[100, 100], [canvas.canvas.width-100, canvas.canvas.height-100]], "white", true, 0.7, "black");
@@ -4674,8 +4789,8 @@ function game_scene() {
   let regions_keys = Object.keys(regions_info);
   for (let i=0; i < regions_keys.length; i++) {
     //regions_info
-    let region_info = regions_info[regions_keys[i]];
-    regions_info[regions_keys[i]].region_obj = new Region(canvas, region_info.coords, "white", regions_keys[i], region_info.extensions);
+    let r_info = regions_info[regions_keys[i]];
+    regions_info[regions_keys[i]].region_obj = new Region(canvas, r_info.coords, "white", regions_keys[i], r_info.extensions);
     //set onclick and possibly hover effects
     let self = regions_info[regions_keys[i]].region_obj;
     self.click = function(e) {
@@ -4827,6 +4942,7 @@ function set_nation(name_input, slogan_input, color_input) {
   self_nation.slogan = slogan_input.current_text;
   self_nation.color = color_input.text;
   self_nation.owned_regions.push(window.starting_region);
+  regions_info[window.starting_region].owner = "self";
   //to the starting region (s? in the future) we want to add a settlement with 3 citizens
   regions_info[window.starting_region].buildings.push({
     "name": "Capital",
@@ -4918,8 +5034,8 @@ function selection_part_1_scene() {
   let regions_keys = Object.keys(regions_info);
   for (let i=0; i < regions_keys.length; i++) {
     //regions_info
-    let region_info = regions_info[regions_keys[i]];
-    let selection_region = new Region(canvas, region_info.coords, "gray", regions_keys[i], region_info.extensions);
+    let r_info = regions_info[regions_keys[i]];
+    let selection_region = new Region(canvas, r_info.coords, "gray", regions_keys[i], r_info.extensions);
     //set onclick (when clicked, give option to go back, or continue and create nation)
     selection_region.click = function(e) {
       let in_path = false;
