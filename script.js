@@ -145,6 +145,7 @@ const units_info = {
   "colonist": {
     "convert_into": 40,
     "speed": 30,
+    "colonize_base": 180,
     "base_upkeep": {
       "supply": 0.5,
       "wealth": 0
@@ -167,17 +168,6 @@ const units_info = {
     }
   }
 };
-
-//break events into sections
-let events = [
-  {
-    name: "",
-    type: "tutorial",
-    text: "",
-    choices: [{}],
-    requirements: [],
-  }
-];
 
 //sea tiles
 let sea_info = {
@@ -884,7 +874,9 @@ let self_nation = {
   owned_regions: [],
   construction: [],
   recruitment: [],
-  colonization: []
+  colonization: {},
+  //eg, temp increase/decrease in happiness or production due to event
+  effects: []
 };
 
 //units moving
@@ -903,6 +895,166 @@ let unit_movements = {
     "path": ["45", "46"]
   }
   */
+};
+
+//event requirement checking function generators
+function event_req_check_gen(event) {
+  return function() {
+    if (events[event].status === "completed") {
+      return true;
+    } else {
+      return false;
+    }
+  }
+}
+
+function building_req_check_gen(type, desigs) {
+  if (desigs === "anywhere") {
+    desigs = self_nation.owned_regions;
+  }
+  return function() {
+    for (let i=0; i < desigs.length; i++) {
+      let r_bs = regions_info[desigs[i]].buildings;
+      for (let ii=0; ii < r_bs.length; ii++) {
+        let r_b = r_bs[ii];
+        if (r_b.type === type) {
+          return true;
+        }
+      }
+    }
+    return false;
+  };
+}
+
+function unit_in_region_foreign_req_check_gen(unit, nation, desig) {
+  return function() {
+  let fu_nums = regions_info[desig].foreign_units[nation].numbers;
+    if (unit === "any") {
+      if (fu_nums['citizen'] !== 0 || fu_nums['conscript'] !== 0 || fu_nums['merchant'] !== 0 || fu_nums['colonist'] !== 0) {
+        return true;
+      }
+    } else {
+      if (fu_nums[unit] !== 0) {
+        return true;
+      }
+    }
+    return false;
+  }
+}
+
+let event_triggers = {
+  //for example, either {next: "adventure-treasure-1-success", desig: "15"} or {next: "adventure-treasure-1-fail", desig: 74}, or false, if unencountered
+  //the desig is not required ofc, just additional info
+  "adventure-treasure-1": false
+};
+
+function trigger_req_check_gen(current_event, previous_event) {
+  return function() {
+    return event_triggers[previous_event].next === current_event;
+  };
+}
+
+//break events into sections
+let events = {
+  //tutorial
+  "tutorial-build-a-farm": {
+    name: "Tutorial: Build a Farm",
+    slug: "tutorial-build-a-farm",
+    type: "tutorial",
+    text: "The supply stockpiles are starting to run low. Build a farm to ensure steady supply production (click the region, go to construction and build the farm).",
+    choices: [
+      {text: "Ok.", next: "tutorial-farm-workers", tooltip: "", effects: []},
+      {text: "Farm? Our people don't need such luxuries.", next: "", tooltip: [""], effects: []}
+    ],
+    requirements: [],
+    repeatable: false,
+    //"unseen", "in progress", "completed", "rejected"
+    status: "unseen",
+    chance: 1
+  },
+  "tutorial-farm-workers": {
+    name: "Tutorial: Farm Workers",
+    slug: "tutorial-farm-workers",
+    type: "tutorial",
+    text: "Now, assign a citizen to the farm to start producing supply (switch to 'units' view, click citizen, and assign to farm).",
+    choices: [
+      {text: "Got it.", next: "", tooltip: [], effects: []}
+    ],
+    requirements: [event_req_check_gen("tutorial-build-a-farm"), building_req_check_gen("farm", "anywhere")],
+    repeatable: false,
+    status: "unseen",
+    chance: 1
+  },
+  //domestic
+  "dirty-streets": {
+    name: "Dirty Streets",
+    slug: "dirty-streets",
+    type: "domestic",
+    text: "The streets of [self_nation:name] are filthy! The citizenry are disgusted, and demand cleanliness",
+    choices: [
+      //if next is an array, randomly choose next from array
+      {text: "Hire street cleaners.", next: "", tooltip: ["-5 wealth"], effects: [{type: "wealth", amount: -5}]},
+      {text: "Clean up the mess you made! Those who litter will be fined.", next: "", tooltip: ["+5 wealth, -3 happiness for 180 days"], effects: [{type: "wealth", amount: 5}, {type: "happiness", amount: 5, duration : 360}]}
+    ],
+    requirements: [],
+    repeatable: true,
+    status: "unseen",
+    chance: 0.05,
+    //chance to repeat after event has already been done
+    second_chance: 0.01
+  },
+  //adventures!
+  "adventure-treasure-1": {
+    name: "Treasure?",
+    slug: "adventure-treasure-1",
+    type: "adventure",
+    text: "Rumors about an old treasure hoard in [random_region:unclaimed,close] have reached [self_nation:name]. If the rumors prove true, a great wealth could be ours!",
+    choices: [
+      //if next is an array, randomly choose next from array
+      {text: "Prepare an expedition!", next: ["adventure-treasure-1-success", "adventure-treasure-1-fail"], tooltip: ["Send any unit to the region"], effects: []},
+      {text: "Rumors cannot be trusted.", next: "", tooltip: [], effects: [], rejected: true}
+    ],
+    requirements: [],
+    repeatable: true,
+    status: "unseen",
+    chance: 0.04,
+    //chance to repeat after event has already been done
+    second_chance: 0.01
+  },
+  "adventure-treasure-1-success": {
+    name: "Treasure Found!",
+    slug: "adventure-treasure-1-success",
+    type: "adventure",
+    text: "The treasure has been found!",
+    choices: [
+      //if next is an array, randomly choose next from array
+      {text: "Good!", next: "", tooltip: ["Gain 50 Wealth"], effects: [{type: "wealth", amount: 50}]}
+    ],
+    requirements: [trigger_req_check_gen("adventure-treasure-1-success", "adventure-treasure-1"), function() {unit_in_region_foreign_req_check_gen("any", "self", event_triggers["adventure-treasure-1"].desig)()}],
+    repeatable: true,
+    status: "unseen",
+    chance: 1
+  },
+  "adventure-treasure-1-fail": {
+    name: "Treasure Found!",
+    slug: "adventure-treasure-1-fail",
+    type: "adventure",
+    text: "We found... nothing.",
+    choices: [
+      //if next is an array, randomly choose next from array
+      {text: "That's fine, the real treasure was the friends we made along the way!", next: "", tooltip: ["Increase happiness by 5% for a year"], effects: [{type: "happiness", amount: 5, duration : 360}]},
+      {text: "What a waste of time.", next: "", tooltip: [""], effects: []}
+    ],
+    requirements: [trigger_req_check_gen("adventure-treasure-1-fail", "adventure-treasure-1"), function() {unit_in_region_foreign_req_check_gen("any", "self", event_triggers["adventure-treasure-1"].desig)()}],
+    repeatable: true,
+    status: "unseen",
+    chance: 1
+  }
+  //weather
+  //disasters
+  //festivals, etc
+  //foreign
+  //trade
 };
 
 //development util functions
@@ -1104,6 +1256,24 @@ class Canvas {
   }
 }
 
+class DeferLoadImage extends Image {
+  constructor(url, load_on, send_loaded_event) {
+    super();
+    this.url = url;
+    this.load_on = load_on;
+    this.send_loaded_event = send_loaded_event;
+  }
+  //custom events
+  customimageload(e) {
+    if (e.detail[this.load_on]) {
+      super.src = this.url;
+      if (send_loaded_event) {
+        //wait for loaded event from image, then send loaded event
+      }
+    }
+  }
+}
+
 class TextButton {
   /**
    * @param {Canvas} canvas
@@ -1117,8 +1287,9 @@ class TextButton {
    * @param {string} border
    * @param {boolean} underline
    * @param {Function} onclick
+   * @param {bool} obey_click_temp_disabled
    */
-  constructor(canvas, coords, text, text_info, background_color, text_color, feedback_text_color, rounded, border, underline, onclick) {
+  constructor(canvas, coords, text, text_info, background_color, text_color, feedback_text_color, rounded, border, underline, onclick, obey_click_temp_disabled) {
     this.canvas = canvas;
     //coords is [[text_x, text_y], [[button_top_x, button_top_y], [button_bottom_x, button_bottom_y]]]
     this.coords = coords;
@@ -1136,20 +1307,27 @@ class TextButton {
     this.set_cursor = false;
     let self = this;
     this.click_unwrapped = onclick;
+    this.obey_ctd = obey_click_temp_disabled;
     this.click = function(e) {
+      if (self.obey_ctd) {
+        if (canvas.click_temp_disabled) return;
+      }
       //check if within coords
-      if ((e.offsetX > self.coords[1][0][0] && e.offsetX < self.coords[1][1][0]) && (e.offsetY > self.coords[1][0][1] && e.offsetY < self.coords[1][1][1])) {
+      if ((e.offsetX > self.coords[1][0][0] && e.offsetX < self.coords[1][1][0]) && (e.offsetY > self.coords[1][0][1] && e.offsetY < self.coords[1][1][1]) && this.display) {
         //button feedback
         self.feedback = true;
         setTimeout(function() {
           self.feedback = false;
         }, 175);
         //now run given function, pass in optional self parameter
-        onclick(self);
+        self.click_unwrapped(self);
       }
     };
     this.mousemove = function(e) {
-      if ((e.offsetX > self.coords[1][0][0] && e.offsetX < self.coords[1][1][0]) && (e.offsetY > self.coords[1][0][1] && e.offsetY < self.coords[1][1][1])) {
+      if ((e.offsetX > self.coords[1][0][0] && e.offsetX < self.coords[1][1][0]) && (e.offsetY > self.coords[1][0][1] && e.offsetY < self.coords[1][1][1]) && this.display) {
+        if (self.obey_ctd) {
+          if (canvas.click_temp_disabled) return;
+        }
         self.set_cursor = true;
         document.body.style.cursor = "pointer";
         //button feedback
@@ -1240,25 +1418,50 @@ class ImageButton {
    * @param {number[]} size
    * @param {string} image_url
    * @param {Image} image
+   * @param {Function} onclick
+   * @param {bool} obey_click_temp_disabled
    */
-  constructor(canvas, coords, size, image_url, image, onclick) {
+  constructor(canvas, coords, size, image_url, image, onclick, obey_click_temp_disabled) {
     this.canvas = canvas;
     //upper left corner?
     this.coords = coords;
     this.size = size;
     this.image_url = image_url;
     this.image = image;
+    this.obey_ctd = obey_click_temp_disabled;
+    this.set_cursor = false;
+    this.display = true;
+    let self = this;
     this.click = function(e) {
-      if (this.canvas.click_temp_disabled) return;
+      if (self.obey_ctd) {
+        if (canvas.click_temp_disabled) return;
+      }
       //check if within coords
-      if ((e.offsetX > this.coords[0] && e.offsetX < this.coords[0]+this.size[0]) && (e.offsetY > this.coords[1] && e.offsetY < this.coords[1]+this.size[1])) {
+      if ((e.offsetX > self.coords[0] && e.offsetX < self.coords[0]+self.size[0]) && (e.offsetY > self.coords[1] && e.offsetY < self.coords[1]+self.size[1]) && this.display) {
         onclick(self);
       }
     }
     this.canvas.addEvent("click", [this], false);
+    this.mousemove = function(e) {
+      if ((e.offsetX > self.coords[0] && e.offsetX < self.coords[0]+self.size[0]) && (e.offsetY > self.coords[1] && e.offsetY < self.coords[1]+self.size[1]) && this.display) {
+        if (self.obey_ctd) {
+          if (canvas.click_temp_disabled) return;
+        }
+        self.set_cursor = true;
+        document.body.style.cursor = "pointer";
+        //button feedback
+      } else {
+        if (self.set_cursor) {
+          self.set_cursor = false;
+          document.body.style.cursor = "default";
+        }
+      }
+    }
+    this.canvas.addEvent("mousemove", [this], false);
     this.canvas.components.push(this);
   }
   update() {
+    if (!this.display) return;
     if (!this.image) {
       this.image = new Image();
       this.image.src = this.image_url;
@@ -1480,6 +1683,9 @@ game_overlay2.src = "/images/nnom_overlay2.png";
 let settingsImage = new Image();
 settingsImage.src = "/images/icons/settings.png";
 
+let logsImage = new Image();
+logsImage.src = "/images/icons/logs.png";
+
 let overlay2_objects = [];
 function toggleOverlay() {
   //toggles between 9 button overlay and info panel overlay (difference is in lower left corner)
@@ -1498,7 +1704,7 @@ function toggleOverlay() {
       }
       window.game_view = window.game_views[current_index];
       canvas.canvas.dispatchEvent(new CustomEvent("customtextchange", {detail: {"game-view": window.game_view}}));
-    });
+    }, true);
     overlay2_objects.push(left_map_view);
     let right_map_view = new TextButton(canvas, [[528, 605], [[525, 590], [537, 607]]], "›", "25px Arial", false, "black", "black", false, false, false, function() {
       let current_index = window.game_views.indexOf(window.game_view);
@@ -1508,13 +1714,15 @@ function toggleOverlay() {
       }
       window.game_view = window.game_views[current_index];
       canvas.canvas.dispatchEvent(new CustomEvent("customtextchange", {detail: {"game-view": window.game_view}}));
-    });
+    }, true);
     overlay2_objects.push(right_map_view);
     let game_view_text = new Text(canvas, [420, 605], window.game_view, "15px Arial", "black", false, false, "game-view");
     overlay2_objects.push(game_view_text);
     //settings cog
-    let settings_btn = new ImageButton(canvas, [160, 653], [65, 38], false, settingsImage, create_settings_modal);
+    let settings_btn = new ImageButton(canvas, [160, 653], [65, 38], false, settingsImage, create_settings_modal, true);
     overlay2_objects.push(settings_btn);
+    let logs_btn = new ImageButton(canvas, [92, 653], [64, 38], false, logsImage, function() {}, true);
+    overlay2_objects.push(logs_btn);
   } else if (window.gameOverlayObject.image_url === "/images/nnom_overlay2.png") {
     window.gameOverlayObject.image_url = "/images/nnom_overlay.png";
     window.gameOverlayObject.image = game_overlay;
@@ -1679,7 +1887,7 @@ class Building {
               return;
             }
           }
-        });
+        }, true);
         this.info_objs.push(assign);
         let unassign = new TextButton(canvas, [[230, 681], [[227, 662], [327, 687]]], "Remove 1 Worker", "12px Arial", false, "black", "#041616", false, false, false, function(self) {
           //see if available citizen
@@ -1719,7 +1927,7 @@ class Building {
               return;
             }
           }
-        });
+        }, true);
         this.info_objs.push(unassign);
       }
       this.info_objs.push(name);
@@ -1869,8 +2077,16 @@ class UnitCard {
   }
 }
 
-//region must be adjacent to already owned land, or adjacent to ocean
 function colonizable(nation, desig) {
+  //check to see if region already owned
+  if (regions_info[desig].owner) {
+    return false;
+  }
+  //check to see if region already being colonized
+  if (self_nation.colonization[desig]) {
+    return false;
+  }
+  //region must be adjacent to already owned land, or adjacent to ocean
   let d_neighbors = regions_info[desig].neighbors;
   for (let d=0; d < d_neighbors.length; d++) {
     if (d_neighbors[d].startsWith("S")) {
@@ -2153,9 +2369,8 @@ class Unit {
       }
       this.unit_amount = unit_amount;
       this.move_amount = unit_amount;
+      //make sure the units don't have tasks, make them unmovable if so
       if (!this.foreign && !this.move_id) {
-        //make sure the units don't have tasks, make them unmovable if so
-        regions_info[this.region_desig].buildings
         for (let b=0; b < regions_info[this.region_desig].buildings.length; b++) {
           let building = regions_info[this.region_desig].buildings[b];
           if (!building.homes) continue;
@@ -2165,6 +2380,13 @@ class Unit {
               //remove one from move_amount
               this.move_amount -= 1;
             }
+          }
+        }
+      } else if (this.foreign) {
+        for (let fu=0; fu < regions_info[this.region_desig].foreign_units["self"].unhoused.length; fu++) {
+          let f_unit = regions_info[this.region_desig].foreign_units["self"].unhoused[fu];
+          if (f_unit.name === this.type && f_unit.task) {
+            this.move_amount -= 1;
           }
         }
       }
@@ -2178,11 +2400,63 @@ class Unit {
       this.info_objs.push(owner_text);
       let moveable_text = new Text(this.canvas, [370, 653], "Movable: "+String(this.move_amount)+"/"+String(this.unit_amount), "12px Arial", "black", false, 180, undefined);
       this.info_objs.push(moveable_text);
-      if (this.type === "colonist" && this.nation === "self" && !this.moving_id) {
+      if (this.type === "colonist" && this.nation === "self" && !this.move_id) {
         //check if current region is colonizable, add colonization button
         if (colonizable(this.nation, this.region_desig)) {
-          let colonize = new TextButton(canvas, [[230, 651], [[227, 632], [327, 657]]], "Colonize", "12px Arial", false, "black", "#041616", false, false, false, function(self) {});
-          this.info_objs.push(colonize);
+          let colonize_button = new TextButton(canvas, [[230, 651], [[227, 632], [327, 657]]], "", "12px Arial", false, "black", "#041616", false, false, false, function() {}, true);
+          colonize_button.display = false;
+          this.info_objs.push(colonize_button);
+          //functions
+          let self = this;
+          function handle_uncolonize() {
+            //remove task
+            let busy_co_i = regions_info[self.region_desig].foreign_units["self"].unhoused.findIndex(function(item) {
+              return item.task === "colonizing" && item.name === "colonist";
+            });
+            regions_info[self.region_desig].foreign_units["self"].unhoused[busy_co_i].task = false;
+            //remove info
+            delete self_nation.colonization[self.region_desig];
+            colonize_button.click_unwrapped = handle_colonize;
+            colonize_button.text = "Colonize";
+          }
+          function handle_colonize() {
+            //double check to make sure it is still colonizable
+            if (colonizable(self.nation, self.region_desig)) {
+              //add info
+              /*
+              {
+                "44":  {
+                  desig: str,
+                  nation: str,
+                  start: int,
+                  finish: int
+                }
+              }
+              */
+              self_nation.colonization[self.region_desig] = {
+                desig: self.region_desig,
+                nation: "self",
+                start: window.ticks,
+                finish: window.ticks+units_info.colonist.colonize_base
+              };
+              //add task
+              let free_co_i = regions_info[self.region_desig].foreign_units["self"].unhoused.findIndex(function(item) {
+                return !item.task && item.name === "colonist";
+              });
+              regions_info[self.region_desig].foreign_units["self"].unhoused[free_co_i].task = "colonizing";
+            }
+            colonize_button.click_unwrapped = handle_uncolonize;
+            colonize_button.text = "Stop Colonize";
+          }
+          if (self_nation.colonization[this.region_desig]) {
+            colonize_button.text = "Stop Colonize";
+            colonize_button.click_unwrapped = handle_uncolonize;
+            colonize_button.display = true;
+          } else {
+            colonize_button.text = "Colonize";
+            colonize_button.click_unwrapped = handle_colonize;
+            colonize_button.display = true;
+          }
         }
       }
       //don't let the player move the units of other nations... obviously
@@ -2867,7 +3141,7 @@ class TextInput {
       }
     }
     this.canvas.context.font = this.text_info;
-    let maxwidth = this.coords[1][1][0] - this.coords[1][0][0] - (this.coords[0][0]-this.coords[1][0][0]);
+    let maxwidth = this.coords[1][1][0] - this.coords[1][0][0] - (this.coords[0][0]-this.coords[1][0][0]) - 3;
     if (this.active) {
       this.canvas.context.fillStyle = this.active_color;
     } else {
@@ -3344,6 +3618,37 @@ affinity_start_background.src = "/images/modified_affinity_screen.png";
 let transparent_selection_map = new Image();
 transparent_selection_map.src = "/images/transparent_selection_map.png";
 
+function check_colonization() {
+  /*
+  {
+    "44":  {
+      desig: str,
+      nation: str,
+      start: int,
+      finish: int
+    }
+  }
+  */
+  for (let i=0; i < Object.keys(self_nation.colonization).length; i++) {
+    let c_desig = Object.keys(self_nation.colonization)[i];
+    let colonize_info = self_nation.colonization[c_desig];
+    if (colonize_info.finish === window.ticks) {
+      //colonization successful
+      //remove task from colonist
+      let c_i = regions_info[c_desig].foreign_units["self"].unhoused.findIndex(function(item) {
+        return item.task === "colonizing" && item.name === "colonist";
+      });
+      regions_info[c_desig].foreign_units["self"].unhoused[c_i].task = false;
+      //add to owned
+      self_nation.owned_regions.push(c_desig);
+      regions_info[c_desig].owner = "self";
+      regions_info[c_desig].region_obj.color = self_nation.color;
+      //remove colonization info
+      delete self_nation.colonization[c_desig];
+    }
+  }
+}
+
 function check_recruitment() {
   /*self_nation.recruitment.push({
     desig: desig,
@@ -3777,6 +4082,7 @@ function tick() {
   unit_production();
   check_construction();
   check_recruitment();
+  check_colonization();
   check_movement();
   if (window.ticks%5 === 0) {
     calculate_happiness();
@@ -3904,7 +4210,7 @@ function create_region_modal(desig, options) {
   //actual modal
   let region_modal = new Modal(canvas, [[100, 100], [canvas.canvas.width-100, canvas.canvas.height-100]], "white", true, 0.7, "black");
   //close button
-  let close_button = new TextButton(canvas, [[region_modal.coords[1][0]-47, region_modal.coords[0][1]+47], [[region_modal.coords[1][0]-50, region_modal.coords[0][1]+10], [region_modal.coords[1][0]-10, region_modal.coords[0][1]+50]]], "x", "34px Arial", false, "black", "#041616", false, false, true, region_modal.close);
+  let close_button = new TextButton(canvas, [[region_modal.coords[1][0]-47, region_modal.coords[0][1]+47], [[region_modal.coords[1][0]-50, region_modal.coords[0][1]+10], [region_modal.coords[1][0]-10, region_modal.coords[0][1]+50]]], "x", "34px Arial", false, "black", "#041616", false, false, true, region_modal.close, false);
   region_modal.members.push(close_button);
   //section functions
   let current_section = [];
@@ -4055,7 +4361,7 @@ function create_region_modal(desig, options) {
         region_obj.buildings[upgrading_index].currently_upgrading = true;
       }
       construct_success(self);
-    });
+    }, false);
     current_section.push(buy_cc1);
     region_modal.members.push(buy_cc1);
     let buy_cc2 = new TextButton(canvas, [[800, 495], [[750, 470], [885, 505]]], "Buy", "22px Arial", "#dbbe1a", "#efe8ee", "white", true, "black", false, function(self){
@@ -4112,7 +4418,7 @@ function create_region_modal(desig, options) {
         region_obj.buildings[upgrading_index].currently_upgrading = true;
       }
       construct_success(self);
-    });
+    }, false);
     current_section.push(buy_cc2);
     region_modal.members.push(buy_cc2);
     //left, right
@@ -4146,7 +4452,7 @@ function create_region_modal(desig, options) {
           }
         }}));
       }
-    });
+    }, false);
     current_section.push(left_btn);
     region_modal.members.push(left_btn);
     let right_btn = new TextButton(canvas, [[955, 330], [[940, 275], [970, 340]]], "›", "60px Arial", false, "black", "#041616", false, false, false, function() {
@@ -4185,7 +4491,7 @@ function create_region_modal(desig, options) {
           }
         }}));
       }
-    });
+    }, false);
     current_section.push(right_btn);
     region_modal.members.push(right_btn);
   }
@@ -4222,7 +4528,7 @@ function create_region_modal(desig, options) {
       //create new modal
       let recruit_modal = new Modal(canvas, [[300, 150], [canvas.canvas.width-300, canvas.canvas.height-150]], "white", true, 0.7, "black");
       //modal children
-      let close_button = new TextButton(canvas, [[recruit_modal.coords[1][0]-47, recruit_modal.coords[0][1]+47], [[recruit_modal.coords[1][0]-50, recruit_modal.coords[0][1]+10], [recruit_modal.coords[1][0]-10, recruit_modal.coords[0][1]+50]]], "x", "34px Arial", false, "black", "#041616", false, false, true, recruit_modal.close);
+      let close_button = new TextButton(canvas, [[recruit_modal.coords[1][0]-47, recruit_modal.coords[0][1]+47], [[recruit_modal.coords[1][0]-50, recruit_modal.coords[0][1]+10], [recruit_modal.coords[1][0]-10, recruit_modal.coords[0][1]+50]]], "x", "34px Arial", false, "black", "#041616", false, false, true, recruit_modal.close, false);
       recruit_modal.members.push(close_button);
       //
       //show options
@@ -4250,7 +4556,7 @@ function create_region_modal(desig, options) {
               self.text = og_text;
             }, 750);
           }
-        });
+        }, false);
         recruit_modal.members.push(from_conscript);
         let from_conscript_info = new Text(canvas, [325, 275], "Will take "+String(units_info.citizen.convert_into)+" days", "12px Arial", "black", false, 200, undefined);
         recruit_modal.members.push(from_conscript_info);
@@ -4272,7 +4578,7 @@ function create_region_modal(desig, options) {
               self.text = og_text;
             }, 750);
           }
-        });
+        }, false);
         recruit_modal.members.push(from_merchant);
         let from_merchant_info = new Text(canvas, [325, 325], "Will take "+String(units_info.citizen.convert_into)+" days", "12px Arial", "black", false, 200, undefined);
         recruit_modal.members.push(from_merchant_info);
@@ -4294,7 +4600,7 @@ function create_region_modal(desig, options) {
               self.text = og_text;
             }, 750);
           }
-        });
+        }, false);
         recruit_modal.members.push(from_colonist);
         let from_colonist_info = new Text(canvas, [325, 375], "Will take "+String(units_info.citizen.convert_into)+" days", "12px Arial", "black", false, 200, undefined);
         recruit_modal.members.push(from_colonist_info);
@@ -4318,7 +4624,7 @@ function create_region_modal(desig, options) {
               self.text = og_text;
             }, 750);
           }
-        });
+        }, false);
         recruit_modal.members.push(from_citizen);
         let from_citizen_info = new Text(canvas, [325, 275], "Will take "+String(units_info.conscript.convert_into)+" days", "12px Arial", "black", false, 200, undefined);
         recruit_modal.members.push(from_citizen_info);
@@ -4342,7 +4648,7 @@ function create_region_modal(desig, options) {
               self.text = og_text;
             }, 750);
           }
-        });
+        }, false);
         recruit_modal.members.push(from_citizen);
         let from_citizen_info = new Text(canvas, [325, 275], "Will take "+String(units_info.merchant.convert_into)+" days", "12px Arial", "black", false, 200, undefined);
         recruit_modal.members.push(from_citizen_info);
@@ -4366,7 +4672,7 @@ function create_region_modal(desig, options) {
               self.text = og_text;
             }, 750);
           }
-        });
+        }, false);
         recruit_modal.members.push(from_citizen);
         let from_citizen_info = new Text(canvas, [325, 275], "Will take "+String(units_info.colonist.convert_into)+" days", "12px Arial", "black", false, 200, undefined);
         recruit_modal.members.push(from_citizen_info);
@@ -4395,28 +4701,28 @@ function create_region_modal(desig, options) {
     region_modal.members.push(merchant_card);
     //if owned by player, display move and recruit buttons
     if (player_owned_region) {
-      let move_btn1 = new TextButton(canvas, [[327, 470], [[310, 450], [380, 480]]], "Move", "15px Arial", "#dbbe1a", "#efe8ee", "white", false, "black", false, unit_move_modal);
+      let move_btn1 = new TextButton(canvas, [[327, 470], [[310, 450], [380, 480]]], "Move", "15px Arial", "#dbbe1a", "#efe8ee", "white", false, "black", false, unit_move_modal, false);
       current_section.push(move_btn1);
       region_modal.members.push(move_btn1);
-      let recruit_btn1 = new TextButton(canvas, [[411, 470], [[400, 450], [470, 480]]], "Recruit", "15px Arial", "#dbbe1a", "#efe8ee", "white", false, "black", false, function() {unit_recruit_modal('citizen')});
+      let recruit_btn1 = new TextButton(canvas, [[411, 470], [[400, 450], [470, 480]]], "Recruit", "15px Arial", "#dbbe1a", "#efe8ee", "white", false, "black", false, function() {unit_recruit_modal('citizen')}, false);
       current_section.push(recruit_btn1);
       region_modal.members.push(recruit_btn1)
-      let move_btn2 = new TextButton(canvas, [[517, 470], [[500, 450], [570, 480]]], "Move", "15px Arial", "#dbbe1a", "#efe8ee", "white", false, "black", false, unit_move_modal);
+      let move_btn2 = new TextButton(canvas, [[517, 470], [[500, 450], [570, 480]]], "Move", "15px Arial", "#dbbe1a", "#efe8ee", "white", false, "black", false, unit_move_modal, false);
       current_section.push(move_btn2);
       region_modal.members.push(move_btn2);
-      let recruit_btn2 = new TextButton(canvas, [[601, 470], [[590, 450], [660, 480]]], "Recruit", "15px Arial", "#dbbe1a", "#efe8ee", "white", false, "black", false, function() {unit_recruit_modal('colonist')});
+      let recruit_btn2 = new TextButton(canvas, [[601, 470], [[590, 450], [660, 480]]], "Recruit", "15px Arial", "#dbbe1a", "#efe8ee", "white", false, "black", false, function() {unit_recruit_modal('colonist')}, false);
       current_section.push(recruit_btn2);
       region_modal.members.push(recruit_btn2);
-      let move_btn3 = new TextButton(canvas, [[707, 470], [[690, 450], [760, 480]]], "Move", "15px Arial", "#dbbe1a", "#efe8ee", "white", false, "black", false, unit_move_modal);
+      let move_btn3 = new TextButton(canvas, [[707, 470], [[690, 450], [760, 480]]], "Move", "15px Arial", "#dbbe1a", "#efe8ee", "white", false, "black", false, unit_move_modal, false);
       current_section.push(move_btn3);
       region_modal.members.push(move_btn3);
-      let recruit_btn3 = new TextButton(canvas, [[791, 470], [[780, 450], [850, 480]]], "Recruit", "15px Arial", "#dbbe1a", "#efe8ee", "white", false, "black", false, function() {unit_recruit_modal('conscript')});
+      let recruit_btn3 = new TextButton(canvas, [[791, 470], [[780, 450], [850, 480]]], "Recruit", "15px Arial", "#dbbe1a", "#efe8ee", "white", false, "black", false, function() {unit_recruit_modal('conscript')}, false);
       current_section.push(recruit_btn3);
       region_modal.members.push(recruit_btn3);
-      let move_btn4 = new TextButton(canvas, [[897, 470], [[880, 450], [950, 480]]], "Move", "15px Arial", "#dbbe1a", "#efe8ee", "white", false, "black", false, unit_move_modal);
+      let move_btn4 = new TextButton(canvas, [[897, 470], [[880, 450], [950, 480]]], "Move", "15px Arial", "#dbbe1a", "#efe8ee", "white", false, "black", false, unit_move_modal, false);
       current_section.push(move_btn4);
       region_modal.members.push(move_btn4);
-      let recruit_btn4 = new TextButton(canvas, [[981, 470], [[970, 450], [1040, 480]]], "Recruit", "15px Arial", "#dbbe1a", "#efe8ee", "white", false, "black", false, function() {unit_recruit_modal('merchant')});
+      let recruit_btn4 = new TextButton(canvas, [[981, 470], [[970, 450], [1040, 480]]], "Recruit", "15px Arial", "#dbbe1a", "#efe8ee", "white", false, "black", false, function() {unit_recruit_modal('merchant')}, false);
       current_section.push(recruit_btn4);
       region_modal.members.push(recruit_btn4);
       //also display progress bar for unit recruitment
@@ -4465,7 +4771,7 @@ function create_region_modal(desig, options) {
       self.underline = true;
       switch_to_overview();
     }
-  });
+  }, false);
   overview.customsectionchange = function(e) {
     if (e.detail.picked !== "overview") {
       this.underline = false;
@@ -4482,7 +4788,7 @@ function create_region_modal(desig, options) {
         self.underline = true;
         switch_to_construct();
       }
-    });
+    }, false);
     construct.customsectionchange = function(e) {
       if (e.detail.picked !== "construct") {
         this.underline = false;
@@ -4496,7 +4802,7 @@ function create_region_modal(desig, options) {
         self.underline = true;
         switch_to_taxes();
       }
-    });
+    }, false);
     taxes.customsectionchange = function(e) {
       if (e.detail.picked !== "taxes") {
         this.underline = false;
@@ -4513,7 +4819,7 @@ function create_region_modal(desig, options) {
       self.underline = true;
       switch_to_units();
     }
-  });
+  }, false);
   units.customsectionchange = function(e) {
     if (e.detail.picked !== "units") {
       this.underline = false;
@@ -4550,7 +4856,7 @@ function create_sea_modal(desig) {
   //actual modal
   let sea_modal = new Modal(canvas, [[100, 100], [canvas.canvas.width-100, canvas.canvas.height-100]], "white", true, 0.7, "black");
   //close button
-  let close_button = new TextButton(canvas, [[sea_modal.coords[1][0]-47, sea_modal.coords[0][1]+47], [[sea_modal.coords[1][0]-50, sea_modal.coords[0][1]+10], [sea_modal.coords[1][0]-10, sea_modal.coords[0][1]+50]]], "x", "34px Arial", false, "black", "#041616", false, false, true, sea_modal.close);
+  let close_button = new TextButton(canvas, [[sea_modal.coords[1][0]-47, sea_modal.coords[0][1]+47], [[sea_modal.coords[1][0]-50, sea_modal.coords[0][1]+10], [sea_modal.coords[1][0]-10, sea_modal.coords[0][1]+50]]], "x", "34px Arial", false, "black", "#041616", false, false, true, sea_modal.close, false);
   sea_modal.members.push(close_button);
   let name = new Text(canvas, [750, 150], "(ID: "+desig+")", "35px Arial", "gray", false, 100, undefined);
   sea_modal.members.push(name);
@@ -4565,7 +4871,7 @@ window.settings = {
 
 function create_settings_modal() {
   let settings_modal = new Modal(canvas, [[100, 100], [canvas.canvas.width-100, canvas.canvas.height-100]], "white", true, 0.7, "black");
-  let close_button = new TextButton(canvas, [[settings_modal.coords[1][0]-47, settings_modal.coords[0][1]+47], [[settings_modal.coords[1][0]-50, settings_modal.coords[0][1]+10], [settings_modal.coords[1][0]-10, settings_modal.coords[0][1]+50]]], "x", "34px Arial", false, "black", "#041616", false, false, true, settings_modal.close);
+  let close_button = new TextButton(canvas, [[settings_modal.coords[1][0]-47, settings_modal.coords[0][1]+47], [[settings_modal.coords[1][0]-50, settings_modal.coords[0][1]+10], [settings_modal.coords[1][0]-10, settings_modal.coords[0][1]+50]]], "x", "34px Arial", false, "black", "#041616", false, false, true, settings_modal.close, false);
   settings_modal.members.push(close_button);
   let name = new Text(canvas, [150, 150], "Settings", "35px Arial", "black", false, 150, undefined);
   settings_modal.members.push(name);
@@ -4870,14 +5176,14 @@ function game_scene() {
   new Text(canvas, [590, 595], "Day 0", "14px Arial", "black", "shadow-white", false, "clock-day");
   window.tick_interval_id = setInterval(tick, 667);
   //help ("?") button
-  new TextButton(canvas, [[0, 0], [[770, 535], [800, 560]]], false, false, "rgba(255, 255, 255, 0)", undefined, undefined, false, false, false, game_help_button);
+  new TextButton(canvas, [[0, 0], [[770, 535], [800, 560]]], false, false, "rgba(255, 255, 255, 0)", undefined, undefined, false, false, false, game_help_button, true);
   //timechanging buttons (pause, play, fast forward)
   //ff
-  new TextButton(canvas, [[0, 0], [[725, 535], [760, 560]]], false, false, "rgba(255, 255, 255, 0)", undefined, undefined, false, false, false, fast_forward_button);
+  new TextButton(canvas, [[0, 0], [[725, 535], [760, 560]]], false, false, "rgba(255, 255, 255, 0)", undefined, undefined, false, false, false, fast_forward_button, true);
   //play
-  new TextButton(canvas, [[0, 0], [[700, 535], [722, 560]]], false, false, "rgba(255, 255, 255, 0)", undefined, undefined, false, false, false, normal_speed_button);
+  new TextButton(canvas, [[0, 0], [[700, 535], [722, 560]]], false, false, "rgba(255, 255, 255, 0)", undefined, undefined, false, false, false, normal_speed_button, true);
   //pause
-  new TextButton(canvas, [[0, 0], [[675, 535], [697, 560]]], false, false, "rgba(255, 255, 255, 0)", undefined, undefined, false, false, false, game_pause_button);
+  new TextButton(canvas, [[0, 0], [[675, 535], [697, 560]]], false, false, "rgba(255, 255, 255, 0)", undefined, undefined, false, false, false, game_pause_button, true);
   //
   //wealth and supply counters
   new Text(canvas, [930, 612], String(self_nation.supply), "25px Arial", "black", undefined, 90, "supply-counter");
@@ -4911,7 +5217,7 @@ function game_scene() {
     }
     window.game_view = window.game_views[current_index];
     canvas.canvas.dispatchEvent(new CustomEvent("customtextchange", {detail: {"game-view": window.game_view}}));
-  });
+  }, true);
   overlay2_objects.push(left_map_view);
   let right_map_view = new TextButton(canvas, [[528, 605], [[525, 590], [537, 607]]], "›", "25px Arial", false, "black", "black", false, false, false, function() {
     let current_index = window.game_views.indexOf(window.game_view);
@@ -4921,13 +5227,15 @@ function game_scene() {
     }
     window.game_view = window.game_views[current_index];
     canvas.canvas.dispatchEvent(new CustomEvent("customtextchange", {detail: {"game-view": window.game_view}}));
-  });
+  }, true);
   overlay2_objects.push(right_map_view);
   let game_view_text = new Text(canvas, [420, 605], window.game_view, "15px Arial", "black", false, false, "game-view");
   overlay2_objects.push(game_view_text);
   //settings cog
-  let settings_btn = new ImageButton(canvas, [160, 653], [65, 38], false, settingsImage, create_settings_modal);
+  let settings_btn = new ImageButton(canvas, [160, 653], [65, 38], false, settingsImage, create_settings_modal, true);
   overlay2_objects.push(settings_btn);
+  let logs_btn = new ImageButton(canvas, [92, 653], [64, 38], false, logsImage, function() {}, true);
+  overlay2_objects.push(logs_btn);
   speed_selected_indicator = new SpeedSelected(canvas, "normal");
 }
 
@@ -4963,7 +5271,7 @@ function selection_part_2_scene(starting_region) {
   //create nation! names, nation color, traits, flags??? stuff like that.
   let center = [canvas.canvas.width, canvas.canvas.height];
   //nation name
-  let name_input = new TextInput(canvas, [[center[0]/2-80, 120], [[center[0]/2-90, 90], [center[0]/2+90, 130]]], "Nation Name", "28px Arial", "gray", "black", "white", true, true, 16, undefined);
+  let name_input = new TextInput(canvas, [[center[0]/2-80, 120], [[center[0]/2-90, 90], [center[0]/2+90, 130]]], "Nation Name", "28px Arial", "gray", "black", "white", true, true, 18, undefined);
   //slogan/motto
   let slogan_input = new TextInput(canvas, [[center[0]/2-215, 160], [[center[0]/2-220, 145], [center[0]/2+220, 165]]], "This is our Slogan and we're Proud of it", "15px Arial", "gray", "black", "white", true, true, 64, ['"', '"'])
   //color (use same as help scene)
@@ -5090,21 +5398,27 @@ function start_scene() {
   new Text(canvas, [canvas.canvas.width/2-(551/2), 300], "Muskets and Bayonets", "65px Canterbury", "black", false, false, undefined);
 }
 
+function load_scene() {
+  //
+}
+
 function help_scene() {
   const help_info = [
     {"title": "Welcome!", "content": "Muskets and Bayonets is a real time grand strategy game set in the early gunpowder era."},
     {"title": "Nation Selection", "content": "Click 'Play', and click a region to start in. Then, enter in name, slogan, and color."},
     {"title": "Mobile Support", "content": "Very good mobile support is offered. Clicking, inputting, and dragging to move all work."},
     {"title": "Map Controls", "content": "Arrow keys or WASD moves the map. Scroll wheel zooms the map in and out. Pressing shift and any of the WASD keys at the same time increases camera speed."},
+    {"title": "Starting Out", "content": "The first priority should be to build a farm."},
     {"title": "Wealth", "content": "Wealth is gotten in a couple different ways. Used for construction, unit upkeep, and more."},
     {"title": "Residence Tax", "content": "Citizens living in a region pay the region's tax rate every 90 days (1 season). More citizens, more tax. Setting the tax rate too high will decrease happiness."},
     {"title": "Happiness", "content": "Many factors can affect happiness. Happiness can result in benefits and positive events, or detriments and negative events."},
     {"title": "Recruiting", "content": "Click on an owned region, and go to the 'Units' tab to recruit units. Citizens can be converted into other units. However, if they are assigned to a task, they cannot be converted. Other units can also be deconverted into citizens."},
-    {"title": "Units", "content": ""},
+    {"title": "Units", "content": "Units take upkeep."},
     {"title": "Moving", "content": "Left click one of your units, and left click the destination region in order to move the unit."},
     {"title": "Units: Citizens", "content": "Citizens are the core of any nation, they can do tasks, produce revenue, and easily be converted into other unit types."},
     {"title": "Units: Colonists", "content": "Colonists are necessary to colonize unclaimed land. Only regions adjacent to owned land, or regions next to sea tiles can be colonized."},
     //other units...
+    {"title": "Building buildings", "content": "Click on an owned region, and go to the 'Construct' tab."},
     {"title": "Buildings", "content": "Each settlement can have one building of each chain. Buildings can produce units, resources, and provide other benefits. They take time to build, as well as supply and wealth to build."},
     {"title": "Buildings: Settlement", "content": "The settlement building and it's upgrades can house units, and slowly produce citizens."},
     {"title": "Buildings: Farms", "content": "Farms and it's upgrades produce supply, when citizens are assigned to it. The more citizens assigned to the farm, the more supply it produces."}
