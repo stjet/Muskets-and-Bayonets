@@ -378,7 +378,7 @@ let regions_info = {
     "neighbors": ["S7"]
   },
   "6": {
-    "coords": [[761,382],[767,378],[768,377],[784,376],[791,379],[797,381],[798,381],[808,382],[814,379],[818,377],[821,375],[826,370],[827,363],[829,359],[827,354],[827,338],[829,337],[834,345],[839,348],[841,359],[844,361],[847,369],[847,380],[851,385],[855,390],[859,393],[860,394],[861,396],[867,398],[870,400],[872,402],[874,407],[881,406],[889,409],[891,413],[891,418],[883,416],[879,418],[879,424],[879,434],[882,436],[883,445],[878,450],[871,453],[865,456],[858,458],[855,458],[855,453],[852,446],[845,447],[833,446],[834,444],[826,445],[825,439],[821,431],[817,427],[815,425],[816,417],[813,418],[811,412],[805,412],[803,405],[798,402],[787,399],[785,399],[787,393],[784,388],[780,385],[761,385]],
+    "coords": [[772,384],[767,385],[759,384],[757,382],[760,379],[763,378],[766,376],[773,376],[782,375],[786,376],[789,378],[793,379],[796,379],[797,382],[800,383],[806,383],[810,380],[816,379],[818,379],[818,376],[821,375],[822,369],[825,369],[826,362],[826,356],[826,351],[826,345],[826,340],[829,335],[831,339],[834,341],[836,347],[838,350],[839,355],[839,358],[845,360],[846,370],[846,377],[850,381],[851,386],[858,393],[866,397],[869,399],[873,404],[887,408],[890,411],[890,415],[888,417],[881,417],[879,420],[879,425],[880,434],[883,437],[883,441],[883,446],[881,449],[877,451],[872,452],[869,455],[863,455],[862,457],[856,457],[855,450],[853,450],[849,445],[837,446],[827,443],[823,436],[818,431],[816,424],[815,418],[811,417],[812,412],[805,410],[800,406],[797,401],[790,400],[786,399],[784,391],[778,388]],
     "extensions": [[[702,371],[713,360],[720,356],[725,370],[723,382],[717,386],[711,388],[705,384],[703,380],[702,380]]],
     "neighbors": ["S7"]
   },
@@ -1357,7 +1357,7 @@ class DeferLoadImage extends Image {
     this.send_loaded_event = send_loaded_event;
     let self = this;
     document.addEventListener("customimageload", function(e) {
-      if (e.detail[this.load_on]) {
+      if (e.detail[self.load_on]) {
         self.change_src(self.url);
         if (self.send_loaded_event) {
           self.onload = function() {
@@ -1773,18 +1773,13 @@ function findAveragePoint(region_desig) {
   return [Math.round(total_x/coords.length), Math.round(total_y/coords.length)];
 }
 
-let game_overlay = new Image();
-game_overlay.src = "/images/nnom_overlay.png";
-let game_overlay2 = new Image();
-game_overlay2.src = "/images/nnom_overlay2.png";
+let game_overlay = new DeferLoadImage("/images/nnom_overlay.png", "game_load_start", true);
+let game_overlay2 = new DeferLoadImage("/images/nnom_overlay2.png", "game_load_start", true);
 
 //lower left icons
 
-let settingsImage = new Image();
-settingsImage.src = "/images/icons/settings.png";
-
-let logsImage = new Image();
-logsImage.src = "/images/icons/logs.png";
+let settingsImage = new DeferLoadImage("/images/icons/settings.png", "game_load_start", true);
+let logsImage = new DeferLoadImage("/images/icons/logs.png", "game_load_start", true);
 
 let overlay2_objects = [];
 function toggleOverlay() {
@@ -1836,38 +1831,24 @@ function toggleOverlay() {
 
 //buildings, units
 
-let settlementImage = new Image();
-settlementImage.src = "/images/buildings/settlement.png";
+let settlementImage = new DeferLoadImage("/images/buildings/settlement.png", "game_load_start", true);
+let settlementImage_simp = new DeferLoadImage("/images/buildings/settlement_simp.png", "game_load_start", true);
 
-let settlementImage_simp = new Image();
-settlementImage_simp.src = "/images/buildings/settlement_simp.png";
+let townImage = new DeferLoadImage("/images/buildings/town.png", "game_load_start", true);
+let townImage_simp = new DeferLoadImage("/images/buildings/town_simp.png", "game_load_start", true);
 
-let townImage = new Image();
-townImage.src = "/images/buildings/town.png";
+let cityImage = new DeferLoadImage("/images/buildings/city.png", "game_load_start", true);
+let cityImage_simp = new DeferLoadImage("/images/buildings/city_simp.png", "game_load_start", true);
 
-let townImage_simp = new Image();
-townImage_simp.src = "/images/buildings/town_simp.png";
+let farmImage_simp = new DeferLoadImage("/images/buildings/farm_simp.png", "game_load_start", true);
 
-let cityImage = new Image();
-cityImage.src = "/images/buildings/city.png";
+let citizenImage = new DeferLoadImage("/images/units/citizen.png", "game_load_start", true);
 
-let cityImage_simp = new Image();
-cityImage_simp.src = "/images/buildings/city_simp.png";
+let colonistImage = new DeferLoadImage("/images/units/colonist.png", "game_load_start", true);
 
-let farmImage_simp = new Image();
-farmImage_simp.src = "/images/buildings/farm_simp.png";
+let conscriptImage = new DeferLoadImage("/images/units/conscript.png", "game_load_start", true);
 
-let citizenImage = new Image();
-citizenImage.src = "/images/units/citizen.png";
-
-let colonistImage = new Image();
-colonistImage.src = "/images/units/colonist.png";
-
-let conscriptImage = new Image();
-conscriptImage.src = "/images/units/conscript.png";
-
-let merchantImage = new Image();
-merchantImage.src = "/images/units/merchant.png";
+let merchantImage = new DeferLoadImage("/images/units/merchant.png", "game_load_start", true);
 
 const buildingImages = {
   settlement: settlementImage_simp,
@@ -3069,7 +3050,7 @@ class Paragraph {
         this.text = text_obj.detail[this.identity];
       } else {
         this.text = text_obj.detail[this.identity][0];
-        this.text = text_obj.detail[this.identity][1];
+        this.addon = text_obj.detail[this.identity][1];
       }
       this.calculate_lines();
     }
@@ -3731,13 +3712,16 @@ setInterval(function() {
   canvas.update();
 }, 1000/12);
 
-//preload game map
-let background_map = new Image();
-background_map.src = "/images/nnommap_big.png";
+let background_map = new DeferLoadImage("/images/nnommap_big.png", "game_load_start", true);
+let transparent_selection_map = new DeferLoadImage("/images/transparent_selection_map.png", "game_load_start", true);
+
+//affinity background only thing preloaded
 let affinity_start_background = new Image();
 affinity_start_background.src = "/images/modified_affinity_screen.png";
-let transparent_selection_map = new Image();
-transparent_selection_map.src = "/images/transparent_selection_map.png";
+
+function check_events() {
+  //
+}
 
 function check_colonization() {
   /*
@@ -4211,6 +4195,10 @@ function tick() {
   //once every 15 days, but upkeep amounts are every half season (45 days)
   if (window.ticks%15 === 0) {
     upkeep();
+  }
+  //20% chance of checking for events, and each event has its own probability roll
+  if (Math.random() < 0.2) {
+    check_events();
   }
   canvas.canvas.dispatchEvent(new CustomEvent("customtextchange", {detail: {"wealth-counter": Math.floor(self_nation.wealth)}}));
   canvas.canvas.dispatchEvent(new CustomEvent("customtextchange", {detail: {"supply-counter": Math.floor(self_nation.supply)}}));
@@ -5506,14 +5494,14 @@ function load_scene() {
   new StaticBackground(canvas, "/images/modified_affinity_screen.png", false, affinity_start_background);
   //loading bar
   let loaded_count = 0;
-  new ProgressBar(canvas, [[300, 300], 600, 5], function() {return loaded_count}, total_loads["game_load_start"], "red", "black");
+  new ProgressBar(canvas, [[300, 300], 600, 55], function() {return loaded_count}, total_loads["game_load_start"], "red", "black");
   //quotes
   let loading_quotes = [['Tip: Switch between different map views to do different things', ""], ['Tip: Click on things', ""], ['Tip: Unhoused (including units in foreign lands) or moving units will take more upkeep.', ""], ['"OW!"', "-Last Words of King Threpanyan 'The Insured'"]];
   let r = Math.floor(Math.random() * loading_quotes.length);
   new Paragraph(canvas, loading_quotes[r][0], "17px Arial", "black", [600, 375], 420, "loading-quote", true, loading_quotes[r][1]);
   let quote_change_interval_id = setInterval(function() {
     r = Math.floor(Math.random() * loading_quotes.length);
-    canvas.canvas.dispatchEvent(new CustomEvent("customtextchange", {detail: {"game_load_start": loading_quotes[r]}}));
+    canvas.canvas.dispatchEvent(new CustomEvent("customtextchange", {detail: {"loading-quote": loading_quotes[r]}}));
   }, 4000);
   //loading logic
   document.dispatchEvent(new CustomEvent("customimageload", {detail: {"game_load_start": true}}));
@@ -5535,7 +5523,7 @@ function start_scene() {
   new StaticBackground(canvas, "/images/modified_affinity_screen.png", false, affinity_start_background);
   let center = [canvas.canvas.width, canvas.canvas.height];
 //play game
-  new TextButton(canvas, [[center[0]/2-30, 425], [[center[0]/2-100, 390], [center[0]/2+100, 440]]], "Play", "28px Arial", "red", "#e5d5e3", "white", true, "black", false, selection_part_1_scene);
+  new TextButton(canvas, [[center[0]/2-30, 425], [[center[0]/2-100, 390], [center[0]/2+100, 440]]], "Play", "28px Arial", "red", "#e5d5e3", "white", true, "black", false, load_scene);
   //Credits
   new TextButton(canvas, [[center[0]/2-75, 485], [[center[0]/2-100, 450], [center[0]/2+40, 500]]], "Credits", "28px Arial", "red", "#e5d5e3", "white", true, "black", false, credit_scene);
   //help
