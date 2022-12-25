@@ -942,6 +942,44 @@ function unit_in_region_foreign_req_check_gen(unit, nation, desig) {
   }
 }
 
+function region_owned_req_check_gen(region) {
+  return function() {
+    return self_nation.owned_regions.includes(region);
+  }
+}
+
+function date_modulo_req_check_gen(modulo_by) {
+  return function() {
+    if (window.ticks === 0) return false;
+    return window.ticks % modulo_by === 0;
+  }
+}
+
+function season_req_check_gen(season) {
+  return function() {
+    let years = Math.floor(window.ticks/360);
+    let seasons = Math.floor((window.ticks - years*360) / 90);
+    let season_names = ["Planting", "Sun", "Harvest", "Rain"];
+    if (season_names[seasons] === season) {
+      return true;
+    } else {
+      return false;
+    }
+  }
+}
+
+function supply_req_check_gen(supply) {
+  return function() {
+    return self_nation.supply >= supply;
+  }
+}
+
+function wealth_req_check_gen(wealth) {
+  return function() {
+    return self_nation.wealth >= wealth;
+  }
+}
+
 let event_triggers = {
   //for example, either {next: "adventure-treasure-1-success", desig: "15"} or {next: "adventure-treasure-1-fail", desig: 74}, or false, if unencountered
   //the desig is not required ofc, just additional info
@@ -953,6 +991,11 @@ function trigger_req_check_gen(current_event, previous_event) {
     return event_triggers[previous_event].next === current_event;
   };
 }
+
+/*
+Provisional lore???
+King Threpanyan 'The Insured': buried in a tomb. killed in battle? ruled ancient kingdom around region 56? rich after he died, because of life insurance
+*/
 
 //break events into sections
 let events = {
@@ -990,11 +1033,12 @@ let events = {
     name: "Dirty Streets",
     slug: "dirty-streets",
     type: "domestic",
-    text: "The streets of [self_nation:name] are filthy! The citizenry are disgusted, and demand cleanliness",
+    text: "The streets of [self_nation:name] are filthy! The citizenry are disgusted, and demand cleanliness.",
     choices: [
       //if next is an array, randomly choose next from array
       {text: "Hire street cleaners.", next: "", tooltip: ["-5 wealth"], effects: [{type: "wealth", amount: -5}]},
-      {text: "Clean up the mess you made! Those who litter will be fined.", next: "", tooltip: ["+5 wealth, -3 happiness for 180 days"], effects: [{type: "wealth", amount: 5}, {type: "happiness", amount: 5, duration : 360}]}
+      {text: "Clean up the mess you made! Those who litter will be fined.", next: "", tooltip: ["+5 wealth, -5 happiness for 180 days"], effects: [{type: "wealth", amount: 5}, {type: "happiness", amount: -5, duration : 180}]},
+      {text: "Dirty streets build character and constitution!", next: "", tooltip: ["-3 happiness for 180 days"], effects: [{type: "happpiness", amount: -3, duration: 180}]}
     ],
     requirements: [],
     repeatable: true,
@@ -1002,6 +1046,36 @@ let events = {
     chance: 0.05,
     //chance to repeat after event has already been done
     second_chance: 0.01
+  },
+  "issuing-a-currency": {
+    name: "Issuing a Currency",
+    slug: "issuing-a-currency",
+    type: "domestic",
+    text: "Now that the nation has a large reserve of wealth, we are in a good position to start issuing a currency. What should the currency be backed by?",
+    choices: [
+      {text: "No one has ever gone wrong with Gold!", next: "", tooltip: ["+5 wealth"], effects: [{type: "wealth", amount: 5}]},
+      {text: "Silver!", next: "", tooltip: ["+1 permanent happiness"], effects: [{type: "happiness", amount: 1, duration : "forever"}]},
+      {text: "The yellow gold: cheese!", next: "", tooltip: ["+5 supply", "An edible currency, truly revolutionary"], effects: [{type: "supply", amount: 5}]}
+    ],
+    requirements: [wealth_req_check_gen(200)],
+    repeatable: false,
+    status: "unseen",
+    chance: 0.1
+  },
+  "royal-tomb": {
+    name: "Royal Tomb",
+    slug: "royal-tomb",
+    type: "domestic",
+    text: "Some farmers accidentally uncovered the ancient tomb of King Threpanyan. Being famed for having a huge life insurance payout, his tomb certainly has a ton of bling.",
+    choices: [
+      //if next is an array, randomly choose next from array
+      {text: "Loot it!", next: ["royal-tomb-consequences", "royal-tomb-consequences", ""], tooltip: ["+20 wealth", "surely there will be no consequences"], effects: [{type: "wealth", amount: 20}]},
+      {text: "Give the dead some respect.", next: "", tooltip: ["king threpanyan thanks you", "his tomb is not insured"], effects: []}
+    ],
+    requirements: [],
+    repeatable: false,
+    status: "unseen",
+    chance: 0.2
   },
   //adventures!
   "adventure-treasure-1": {
@@ -1027,7 +1101,6 @@ let events = {
     type: "adventure",
     text: "The treasure has been found!",
     choices: [
-      //if next is an array, randomly choose next from array
       {text: "Good!", next: "", tooltip: ["Gain 50 Wealth"], effects: [{type: "wealth", amount: 50}]}
     ],
     requirements: [trigger_req_check_gen("adventure-treasure-1-success", "adventure-treasure-1"), function() {unit_in_region_foreign_req_check_gen("any", "self", event_triggers["adventure-treasure-1"].desig)()}],
@@ -1041,7 +1114,6 @@ let events = {
     type: "adventure",
     text: "We found... nothing.",
     choices: [
-      //if next is an array, randomly choose next from array
       {text: "That's fine, the real treasure was the friends we made along the way!", next: "", tooltip: ["Increase happiness by 5% for a year"], effects: [{type: "happiness", amount: 5, duration : 360}]},
       {text: "What a waste of time.", next: "", tooltip: [""], effects: []}
     ],
@@ -1049,10 +1121,25 @@ let events = {
     repeatable: true,
     status: "unseen",
     chance: 1
-  }
+  },
+  //festivals, etc
+  "new-year-festival": {
+    name: "New Year Festival",
+    slug: "new-year-festival",
+    type: "festival",
+    text: "The new year brings new questions. Who to meet, what to make, what to do. And most importantly, how much to spend on the celebrations!",
+    choices: [
+      {text: "We shall sponsor the celebrations.", next: "", tooltip: ["-10 wealth, +7 happiness for a year"], effects: [{type: "wealth", amount: -10}, {type: "happiness", amount: 7, duration : 360}]},
+      {text: "We shall provide food.", next: "", tooltip: ["+10 supply, +7 happiness for a year"], effects: [{type: "supply", amount: -10}, {type: "happiness", amount: 7, duration : 360}]},
+      {text: "Times are hard, nothing can be spared.", next: "", tooltip: ["what a cheapskate"], effects: []}
+    ],
+    requirements: [date_modulo_req_check_gen(360)],
+    repeatable: true,
+    status: "unseen",
+    chance: 1
+  },
   //weather
   //disasters
-  //festivals, etc
   //foreign
   //trade
 };
@@ -1256,21 +1343,34 @@ class Canvas {
   }
 }
 
+let total_loads = {};
+
 class DeferLoadImage extends Image {
   constructor(url, load_on, send_loaded_event) {
     super();
     this.url = url;
     this.load_on = load_on;
-    this.send_loaded_event = send_loaded_event;
-  }
-  //custom events
-  customimageload(e) {
-    if (e.detail[this.load_on]) {
-      super.src = this.url;
-      if (send_loaded_event) {
-        //wait for loaded event from image, then send loaded event
-      }
+    if (!total_loads[this.load_on]) {
+      total_loads[this.load_on] = 0;
     }
+    total_loads[this.load_on] += 1;
+    this.send_loaded_event = send_loaded_event;
+    let self = this;
+    document.addEventListener("customimageload", function(e) {
+      if (e.detail[this.load_on]) {
+        self.change_src(self.url);
+        if (self.send_loaded_event) {
+          self.onload = function() {
+            //in future, send image size?
+            //send loaded event
+            document.dispatchEvent(new CustomEvent("customimagedone", {detail: true}));
+          }
+        }
+      }
+    });
+  }
+  change_src(url) {
+    super.src = url;
   }
 }
 
@@ -2922,8 +3022,9 @@ class Paragraph {
    * @param {number[]} coord
    * @param {number} max_width
    * @param {bool} identity
+   * @param {bool} centered
    */
-  constructor(canvas, text, text_info, text_color, coord, max_width, identity) {
+  constructor(canvas, text, text_info, text_color, coord, max_width, identity, centered=false, addon=false) {
     this.canvas = canvas;
     this.text = text;
     this.text_info = text_info;
@@ -2931,6 +3032,8 @@ class Paragraph {
     this.coord = coord;
     this.max_width = max_width;
     this.identity = identity;
+    this.centered = centered;
+    this.addon = addon;
     if (this.identity) {
       this.canvas.addEvent("customtextchange", [this], false);
     }
@@ -2962,7 +3065,12 @@ class Paragraph {
   }
   customtextchange(text_obj) {
     if (text_obj.detail[this.identity] !== undefined && text_obj.detail[this.identity] !== false) {
-      this.text = text_obj.detail[this.identity];
+      if (typeof text_obj.detail[this.identity] === "string") {
+        this.text = text_obj.detail[this.identity];
+      } else {
+        this.text = text_obj.detail[this.identity][0];
+        this.text = text_obj.detail[this.identity][1];
+      }
       this.calculate_lines();
     }
   }
@@ -2972,7 +3080,20 @@ class Paragraph {
       let line = this.lines[l];
       this.canvas.context.font = this.text_info;
       this.canvas.context.fillStyle = this.text_color;
-      this.canvas.context.fillText(line, this.coord[0], this.coord[1] + (text_height+2)*l, this.max_width);
+      if (this.centered) {
+        let width = this.canvas.context.measureText(line).width;
+        this.canvas.context.fillText(line, Math.round(this.coord[0]-width/2), this.coord[1] + (text_height+2)*l, this.max_width);
+      } else {
+        this.canvas.context.fillText(line, this.coord[0], this.coord[1] + (text_height+2)*l, this.max_width);
+      }
+    }
+    if (this.addon) {
+      if (this.centered) {
+        let width = this.canvas.context.measureText(this.addon).width;
+        this.canvas.context.fillText(this.addon, Math.round(this.coord[0]-width/2), this.coord[1] + (text_height+2)*(this.lines.length+1), this.max_width);
+      } else {
+        this.canvas.context.fillText(this.addon, this.coord[0], this.coord[1] + (text_height+2)*(this.lines.length+1), this.max_width);
+      }
     }
   }
 }
@@ -5379,6 +5500,33 @@ function selection_part_1_scene() {
   //then go to game_scene()
 }
 
+//should be after clicking "Play"
+function load_scene() {
+  canvas.reset();
+  new StaticBackground(canvas, "/images/modified_affinity_screen.png", false, affinity_start_background);
+  //loading bar
+  let loaded_count = 0;
+  new ProgressBar(canvas, [[300, 300], 600, 5], function() {return loaded_count}, total_loads["game_load_start"], "red", "black");
+  //quotes
+  let loading_quotes = [['Tip: Switch between different map views to do different things', ""], ['Tip: Click on things', ""], ['Tip: Unhoused (including units in foreign lands) or moving units will take more upkeep.', ""], ['"OW!"', "-Last Words of King Threpanyan 'The Insured'"]];
+  let r = Math.floor(Math.random() * loading_quotes.length);
+  new Paragraph(canvas, loading_quotes[r][0], "17px Arial", "black", [600, 375], 420, "loading-quote", true, loading_quotes[r][1]);
+  let quote_change_interval_id = setInterval(function() {
+    r = Math.floor(Math.random() * loading_quotes.length);
+    canvas.canvas.dispatchEvent(new CustomEvent("customtextchange", {detail: {"game_load_start": loading_quotes[r]}}));
+  }, 4000);
+  //loading logic
+  document.dispatchEvent(new CustomEvent("customimageload", {detail: {"game_load_start": true}}));
+  document.addEventListener("customimagedone", function(e) {
+    loaded_count++;
+    //check if all images have loaded
+    if (loaded_count === total_loads["game_load_start"]) {
+      clearInterval(quote_change_interval_id);
+      selection_part_1_scene();
+    }
+  });
+}
+
 function start_scene() {
   canvas.reset();
   //start screen
@@ -5396,10 +5544,6 @@ function start_scene() {
   //42px width: 356
   //65px width: close to 551
   new Text(canvas, [canvas.canvas.width/2-(551/2), 300], "Muskets and Bayonets", "65px Canterbury", "black", false, false, undefined);
-}
-
-function load_scene() {
-  //
 }
 
 function help_scene() {
