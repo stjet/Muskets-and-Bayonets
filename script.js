@@ -898,6 +898,9 @@ let unit_movements = {
 };
 
 //event requirement checking function generators
+/**
+ * @param {string} event
+ */
 function event_req_check_gen(event) {
   return function() {
     if (events[event].status === "completed") {
@@ -908,6 +911,10 @@ function event_req_check_gen(event) {
   }
 }
 
+/**
+ * @param {string} type
+ * @param {string[] | string} desigs
+ */
 function building_req_check_gen(type, desigs) {
   if (desigs === "anywhere") {
     desigs = self_nation.owned_regions;
@@ -926,9 +933,17 @@ function building_req_check_gen(type, desigs) {
   };
 }
 
+/**
+ * @param {string} unit
+ * @param {string} nation
+ * @param {string} desig
+ */
 function unit_in_region_foreign_req_check_gen(unit, nation, desig) {
   return function() {
-  let fu_nums = regions_info[desig].foreign_units[nation].numbers;
+    if (!desig) {
+      return false;
+    }
+    let fu_nums = regions_info[desig].foreign_units[nation].numbers;
     if (unit === "any") {
       if (fu_nums['citizen'] !== 0 || fu_nums['conscript'] !== 0 || fu_nums['merchant'] !== 0 || fu_nums['colonist'] !== 0) {
         return true;
@@ -942,12 +957,18 @@ function unit_in_region_foreign_req_check_gen(unit, nation, desig) {
   }
 }
 
+/**
+ * @param {string} region region desig
+ */
 function region_owned_req_check_gen(region) {
   return function() {
     return self_nation.owned_regions.includes(region);
   }
 }
 
+/**
+ * @param {number} modulo_by
+ */
 function date_modulo_req_check_gen(modulo_by) {
   return function() {
     if (window.ticks === 0) return false;
@@ -955,6 +976,9 @@ function date_modulo_req_check_gen(modulo_by) {
   }
 }
 
+/**
+ * @param {string} season
+ */
 function season_req_check_gen(season) {
   return function() {
     let years = Math.floor(window.ticks/360);
@@ -968,12 +992,18 @@ function season_req_check_gen(season) {
   }
 }
 
+/**
+ * @param {number} supply
+ */
 function supply_req_check_gen(supply) {
   return function() {
     return self_nation.supply >= supply;
   }
 }
 
+/**
+ * @param {number} wealth
+ */
 function wealth_req_check_gen(wealth) {
   return function() {
     return self_nation.wealth >= wealth;
@@ -986,6 +1016,10 @@ let event_triggers = {
   "adventure-treasure-1": false
 };
 
+/**
+ * @param {string} current_event
+ * @param {string} previous_event
+ */
 function trigger_req_check_gen(current_event, previous_event) {
   return function() {
     return event_triggers[previous_event].next === current_event;
@@ -1072,7 +1106,7 @@ let events = {
       {text: "Loot it!", next: ["royal-tomb-consequences", "royal-tomb-consequences", ""], tooltip: ["+20 wealth", "surely there will be no consequences"], effects: [{type: "wealth", amount: 20}]},
       {text: "Give the dead some respect.", next: "", tooltip: ["king threpanyan thanks you", "his tomb is not insured"], effects: []}
     ],
-    requirements: [],
+    requirements: [unit_in_region_foreign_req_check_gen("any", "self", "56")],
     repeatable: false,
     status: "unseen",
     chance: 0.2
@@ -1346,6 +1380,11 @@ class Canvas {
 let total_loads = {};
 
 class DeferLoadImage extends Image {
+  /**
+   * @param {string} url
+   * @param {string} load_on
+   * @param {bool} send_loaded_event
+   */
   constructor(url, load_on, send_loaded_event) {
     super();
     this.url = url;
@@ -1389,7 +1428,7 @@ class TextButton {
    * @param {Function} onclick
    * @param {bool} obey_click_temp_disabled
    */
-  constructor(canvas, coords, text, text_info, background_color, text_color, feedback_text_color, rounded, border, underline, onclick, obey_click_temp_disabled) {
+  constructor(canvas, coords, text, text_info, background_color, text_color, feedback_text_color, rounded, border, underline, onclick, obey_click_temp_disabled, lineWidth=1) {
     this.canvas = canvas;
     //coords is [[text_x, text_y], [[button_top_x, button_top_y], [button_bottom_x, button_bottom_y]]]
     this.coords = coords;
@@ -1408,6 +1447,7 @@ class TextButton {
     let self = this;
     this.click_unwrapped = onclick;
     this.obey_ctd = obey_click_temp_disabled;
+    this.lineWidth = lineWidth;
     this.click = function(e) {
       if (self.obey_ctd) {
         if (canvas.click_temp_disabled) return;
@@ -1450,6 +1490,7 @@ class TextButton {
       return;
     }
     //button
+    this.canvas.context.lineWidth = this.lineWidth;
     if (this.coords[1] && this.background_color) {
       //draw outline
       //fill
@@ -1652,6 +1693,14 @@ class MovingBackground {
 }
 
 class Modal {
+  /**
+   * @param {Canvas} canvas
+   * @param {number[]} coords
+   * @param {string} color
+   * @param {bool} rounded
+   * @param {number} background_opacity
+   * @param {string} border
+   */
   constructor(canvas, coords, color, rounded, background_opacity, border) {
     this.canvas = canvas;
     this.canvas.scroll_temp_disabled = true;
@@ -1711,15 +1760,22 @@ class Modal {
         this.canvas.context.strokeStyle = this.border;
         this.canvas.context.stroke(path);
       }
+    } else {
+      let path = new Path2D();
+      path.moveTo(...this.coords[0]);
+      path.lineTo(this.coords[1][0], this.coords[0][1]);
+      path.lineTo(...this.coords[1]);
+      path.lineTo(this.coords[0][0], this.coords[1][1]);
+      path.lineTo(...this.coords[0]);
+      this.canvas.context.fillStyle = this.color;
+      this.canvas.context.fill(path);
+      if (this.border) {
+        this.canvas.context.strokeStyle = this.border;
+        this.canvas.context.stroke(path);
+      }
     }
   }
 }
-
-/*
-class EventModal {
-  //
-}
-*/
 
 /**
  * @param {number[][]} coords
@@ -1762,6 +1818,9 @@ function rotateCoord(coord, center, rad) {
 }
 
 //find center point of a region
+/**
+ * @param {string} region_desig
+ */
 function findAveragePoint(region_desig) {
   let coords = regions_info[region_desig].coords;
   let total_x = 0;
@@ -1860,6 +1919,11 @@ const buildingImages = {
 //just the picture of building on map, not info
 class Building {
   //picture of building
+  /**
+   * @param {Canvas} canvas
+   * @param {string} region_desig
+   * @param {string} building_name
+   */
   constructor(canvas, region_desig, building_name) {
     this.canvas = canvas;
     this.region_desig = region_desig;
@@ -2158,6 +2222,10 @@ class UnitCard {
   }
 }
 
+/**
+ * @param {string} nation
+ * @param {string} desig
+ */
 function colonizable(nation, desig) {
   //check to see if region already owned
   if (regions_info[desig].owner) {
@@ -2193,6 +2261,9 @@ function colonizable(nation, desig) {
   return false;
 }
 
+/**
+ * @param {string} desig
+ */
 function sea_accessible_only(desig) {
   let non_sea = regions_info[desig].neighbors.findIndex(function(item) {
     return !item.startsWith("S");
@@ -2204,6 +2275,11 @@ function sea_accessible_only(desig) {
 }
 
 //find shortest path from region to region, breadth
+/**
+ * @param {string} from from region desig
+ * @param {string} to to region desig
+ * @param {bool | undefined} sea pathfind through sea tiles or not
+ */
 function pathfind(from, to, sea=false) {
   //if region's only neighbors are sea provs, and unit can't cross sea... well obviously that region is not accessible
   if (sea_accessible_only(to) && !sea) {
@@ -2276,6 +2352,15 @@ function get_move_id() {
   return "move-id-"+mid;
 }
 
+/**
+ * @param {string} nation
+ * @param {string} type
+ * @param {number} amount
+ * @param {string} desig from region desig
+ * @param {string} to to region desig
+ * @param {bool | undefined} to_path already defined path?
+ * @param {bool | undefined} sea whether to pathfind through sea
+ */
 function move_unit(nation, type, amount, desig, to, to_path=false, sea=false) {
   //remove
   //add to unit_movements
@@ -2305,6 +2390,15 @@ function move_unit(nation, type, amount, desig, to, to_path=false, sea=false) {
 
 class Unit {
   //picture of unit, like barbarian hordes, or to indicate (military?) presence in region, also its clicks and stuff
+  /**
+   * 
+   * @param {Canvas} canvas
+   * @param {string} nation
+   * @param {string} region_desig
+   * @param {string} type
+   * @param {string | undefined} move_id
+   * @param {bool | undefined} foreign
+   */
   constructor(canvas, nation, region_desig, type, move_id="", foreign=false) {
     this.canvas = canvas;
     //nation/owner
@@ -3583,6 +3677,12 @@ class ConstructionCard {
 }
 
 //shorthand functions for unit objects
+/**
+ * 
+ * @param {string} desig 
+ * @param {string} building_name 
+ * @returns {Object} citizen unit object
+ */
 function make_citizen(desig, building_name) {
   add_to_units(desig, "citizen");
   return {
@@ -3595,6 +3695,12 @@ function make_citizen(desig, building_name) {
   };
 }
 
+/**
+ * 
+ * @param {string} desig 
+ * @param {string} building_name 
+ * @returns {Object} colonist unit object
+ */
 function make_colonist(desig, building_name) {
   add_to_units(desig, "colonist");
   return {
@@ -3606,6 +3712,12 @@ function make_colonist(desig, building_name) {
   };
 }
 
+/**
+ * 
+ * @param {string} desig 
+ * @param {string} building_name 
+ * @returns {Object} conscript unit object
+ */
 function make_conscript(desig, building_name) {
   add_to_units(desig, "conscript");
   return {
@@ -3617,6 +3729,12 @@ function make_conscript(desig, building_name) {
   };
 }
 
+/**
+ * 
+ * @param {string} desig 
+ * @param {string} building_name 
+ * @returns {Object} merchant unit object
+ */
 function make_merchant(desig, building_name) {
   add_to_units(desig, "merchant");
   return {
@@ -3631,6 +3749,14 @@ function make_merchant(desig, building_name) {
 
 //true is success, false is failed
 //don't worry future self, subtypes should be already handled using this system
+/**
+ * 
+ * @param {string} desig 
+ * @param {string} unit_name 
+ * @param {string} into_unit_name 
+ * @param {number} time 
+ * @returns {bool} success/failure of conversion
+ */
 function convert_units(desig, unit_name, into_unit_name, time) {
   if (regions_info[desig].units[unit_name]) {
     //remove from homes
@@ -3690,6 +3816,11 @@ function convert_units(desig, unit_name, into_unit_name, time) {
 
 let canvas = new Canvas([1200,700], "game-canvas");
 
+/**
+ * 
+ * @param {string} desig 
+ * @param {string} unit_name 
+ */
 function add_to_units(desig, unit_name) {
   if (regions_info[desig].units[unit_name] && regions_info[desig].units[unit_name] !== 0) {
     regions_info[desig].units[unit_name] += 1;
@@ -3720,7 +3851,39 @@ let affinity_start_background = new Image();
 affinity_start_background.src = "/images/modified_affinity_screen.png";
 
 function check_events() {
-  //
+  for (let e=0; e < Object.values(events).length; e++) {
+    let event = Object.values(events)[e];
+    let do_event = false;
+    if (event.status === "unseen") {
+      if (Math.random() < event.chance) {
+        do_event = true;
+      }
+    } else if ((event.status === "complete" || event.status === "rejected") && event.repeatable) {
+      if (event.second_chance) {
+        if (Math.random() < event.second_chance) {
+          do_event = true;
+        }
+      } else {
+        if (Math.random() < event.chance) {
+          do_event = true;
+        }
+      }
+    }
+    if (do_event) {
+      //check requirements
+      for (let r=0; r < event.requirements.length; r++) {
+        //requirement failed
+        if (!event.requirements[r]()) {
+          do_event = false;
+        }
+      }
+      if (do_event) {
+        events[event.slug].status = "progress";
+        create_event_modal(events[event.slug]);
+        return;
+      }
+    }
+  }
 }
 
 function check_colonization() {
@@ -3808,6 +3971,12 @@ function check_recruitment() {
   }
 */
 
+/**
+ * 
+ * @param {string} desig 
+ * @param {string} nation 
+ * @param {string} unit_name 
+ */
 function add_to_foreign(desig, nation, unit_name) {
   if (regions_info[desig].foreign_units[nation].numbers[unit_name]) {
     regions_info[desig].foreign_units[nation].numbers[unit_name] += 1;
@@ -4053,6 +4222,9 @@ function upkeep() {
   }
 }
 
+/**
+ * @param {number} pay_period 
+ */
 function residence_tax_payment(pay_period) {
   for (let i=0; i < self_nation.owned_regions.length; i++) {
     let o_region = regions_info[self_nation.owned_regions[i]];
@@ -4092,6 +4264,11 @@ function unit_production() {
   }
 }
 
+/**
+ * 
+ * @param {string} desig 
+ * @returns {number} happiness contribution of region
+ */
 function calculate_happiness_contribution(desig) {
   let contrib = 0;
   let o_region = regions_info[desig];
@@ -4136,6 +4313,10 @@ function calculate_happiness_contribution(desig) {
   return contrib;
 }
 
+/**
+ * @param {string} desig 
+ * @returns {number} wealth contribution of region
+ */
 function calculate_wealth_contribution(desig) {
   let contrib = 0;
   let o_region = regions_info[desig];
@@ -4197,7 +4378,7 @@ function tick() {
     upkeep();
   }
   //20% chance of checking for events, and each event has its own probability roll
-  if (Math.random() < 0.2) {
+  if (Math.random() < 0.15 && window.ticks > 5) {
     check_events();
   }
   canvas.canvas.dispatchEvent(new CustomEvent("customtextchange", {detail: {"wealth-counter": Math.floor(self_nation.wealth)}}));
@@ -4247,6 +4428,10 @@ function normal_speed_button() {
   window.tick_interval_id = setInterval(tick, 667);
 }
 
+/**
+ * @param {string} desig 
+ * @returns {Object[]} list of buildable buildings in region
+ */
 function get_buildable_buildings(desig) {
   //iterate through buildings and add the upgrades, and not built
   let buildable = [];
@@ -4972,6 +5157,99 @@ function create_sea_modal(desig) {
   //
 }
 
+let desig_needed_decisions = {"adventure-treasure-1": ""};
+
+/**
+ * @param {string} event_slug
+ * @param {Object} event_choice `events` member's choice
+ * @param {string} event_choice.text
+ * @param {string} event_choice.next
+ * @param {string | string[]} event_choice.tooltip
+ * @param {any[]} event_choice.effects
+ */
+function handle_choice(event_slug, event_choice) {
+  events[event_slug].status = "completed";
+  if (typeof event_choice.next !== "string") {
+    let trigger = {next: event_choice.next[Math.floor(Math.random() * event_choice.next.length)]};
+    if (desig_needed_decisions[event_slug]) {
+      trigger.desig = desig_needed_decisions[event_slug]
+    }
+    event_triggers[event_slug] = trigger;
+  }
+  //handle effects
+  for (let e=0; e < event_choice.effects.length; e++) {
+    let effect = event_choice.effects[e];
+    if (effect.type === "wealth") {
+      //
+    } else if (effect.type === "supply") {
+      //
+    } else if (effect.type === "happiness") {
+      //self_nation.effects for happiness modifiers
+      //
+    }
+  }
+}
+
+/**
+ * @param {string} text
+ * @param {string} event_slug
+ */
+function sub(text, event_slug) {
+  if (text.includes("[random_region:unclaimed,close]")) {
+    let r_num = "56";
+    let region_o = Number(self_nation.owned_regions[0]);
+    for (let i=0; i < 5; i++) {
+      if (regions_info[String(region_o+(i+1))]) {
+        if (regions_info[String(region_o+(i+1))].owner === "") {
+          r_num = String(region_o+(i+1));
+          break;
+        }
+      }
+      if (regions_info[String(region_o-(i+1))]) {
+        if (regions_info[String(region_o-(i+1))].owner === "") {
+          r_num = String(region_o-(i+1));
+          break;
+        }
+      }
+    }
+    desig_needed_decisions[event_slug].desig = r_num;
+    text = text.replace("[random_region:unclaimed,close]", desig_needed_decisions[event_slug].desig);
+  }
+  return text.replace("[self_nation:name]", self_nation.name);
+}
+
+/**
+ * @param {Object} event `events` member
+ */
+function create_event_modal(event) {
+  game_pause_button();
+  //let settings_modal = new Modal(canvas, [[100, 100], [canvas.canvas.width-100, canvas.canvas.height-100]], "white", true, 0.7, "black");
+  let event_modal = new Modal(canvas, [[300, 150], [canvas.canvas.width-300, canvas.canvas.height-150]], "white", false, 0.7, "black");
+  canvas.context.font = "35px Arial";
+  let name_width = canvas.context.measureText(event.name).width;
+  let name = new Text(canvas, [Math.round(600-(name_width/2)), 200], event.name, "35px Arial", "black", false, 450, undefined);
+  event_modal.members.push(name);
+  let event_text = sub(event.text);
+  let text = new Paragraph(canvas, event_text, "18px Arial", "black", [360, 230], 480);
+  event_modal.members.push(text);
+  for (let i=0; i < event.choices.length; i++) {
+    let choice = event.choices[i];
+    let choice_btn = new TextButton(canvas, [[365, 460+i*25], [[360, 445+i*25], [840, 465+i*25]]], choice.text, "16px Arial", "#98a5a4", "black", "#141414", false, "black", false, function() {
+      normal_speed_button();
+      handle_choice(event.slug, choice);
+      event_modal.close();
+    }, false)
+    event_modal.members.push(choice_btn);
+  }
+}
+
+function create_event_logs_modal() {
+  let event_logs_modal = new Modal(canvas, [[100, 100], [canvas.canvas.width-100, canvas.canvas.height-100]], "white", true, 0.7, "black");
+  let close_button = new TextButton(canvas, [[event_logs_modal.coords[1][0]-47, event_logs_modal.coords[0][1]+47], [[event_logs_modal.coords[1][0]-50, event_logs_modal.coords[0][1]+10], [event_logs_modal.coords[1][0]-10, event_logs_modal.coords[0][1]+50]]], "x", "34px Arial", false, "black", "#041616", false, false, true, event_logs_modal.close, false);
+  event_logs_modal.members.push(close_button);
+  //
+}
+
 window.settings = {
   shadow: true,
   negative_coords: false,
@@ -4999,6 +5277,10 @@ function create_settings_modal() {
   settings_modal.members.push(gradient_toggle);
 }
 
+/**
+ * @param {number[]} p point
+ * @param {string} desig
+ */
 function point_in_region(p, desig) {
   let in_region = false;
   let self = regions_info[desig].region_obj;
@@ -5274,7 +5556,7 @@ function game_scene() {
   //crown is around 15 pixels off center
   window.gameOverlayObject = new StaticBackground(canvas, "/images/nnom_overlay2.png", false, game_overlay2);
   //nation name box: lower left [555, 680]
-  new Text(canvas, [555, 675], self_nation.name, "18px Arial", "black", false, 120, undefined);
+  new Text(canvas, [557, 673], self_nation.name, "18px Arial", "black", false, 120, undefined);
   //1 second = 1 day as standard, but it should be able to be arbitrarily changed (fast forward)
   new Text(canvas, [590, 540], "Year 0", "14px Arial", "black", "shadow-white", false, "clock-year");
   //center season text
@@ -5343,7 +5625,7 @@ function game_scene() {
   //settings cog
   let settings_btn = new ImageButton(canvas, [160, 653], [65, 38], false, settingsImage, create_settings_modal, true);
   overlay2_objects.push(settings_btn);
-  let logs_btn = new ImageButton(canvas, [92, 653], [64, 38], false, logsImage, function() {}, true);
+  let logs_btn = new ImageButton(canvas, [92, 653], [64, 38], false, logsImage, create_event_logs_modal, true);
   overlay2_objects.push(logs_btn);
   speed_selected_indicator = new SpeedSelected(canvas, "normal");
 }
