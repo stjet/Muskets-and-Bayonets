@@ -19,6 +19,8 @@ Others are also credited in "Credits" section of the game.
 
 placeholder
 
+Planned to be open source, probably with a strict GPL license?
+
 ## Technical Details
 
 HTML Canvas

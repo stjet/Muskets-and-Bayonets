@@ -876,7 +876,7 @@ let self_nation = {
   recruitment: [],
   colonization: {},
   //eg, temp increase/decrease in happiness or production due to event
-  effects: []
+  statuses: []
 };
 
 //units moving
@@ -896,6 +896,8 @@ let unit_movements = {
   }
   */
 };
+
+let event_history = [];
 
 //event requirement checking function generators
 /**
@@ -941,6 +943,9 @@ function building_req_check_gen(type, desigs) {
 function unit_in_region_foreign_req_check_gen(unit, nation, desig) {
   return function() {
     if (!desig) {
+      return false;
+    }
+    if (!regions_info[desig].foreign_units[nation]) {
       return false;
     }
     let fu_nums = regions_info[desig].foreign_units[nation].numbers;
@@ -1022,6 +1027,9 @@ let event_triggers = {
  */
 function trigger_req_check_gen(current_event, previous_event) {
   return function() {
+    if (!event_triggers[previous_event]) {
+      return false;
+    }
     return event_triggers[previous_event].next === current_event;
   };
 }
@@ -1040,8 +1048,8 @@ let events = {
     type: "tutorial",
     text: "The supply stockpiles are starting to run low. Build a farm to ensure steady supply production (click the region, go to construction and build the farm).",
     choices: [
-      {text: "Ok.", next: "tutorial-farm-workers", tooltip: "", effects: []},
-      {text: "Farm? Our people don't need such luxuries.", next: "", tooltip: [""], effects: []}
+      {text: "Ok.", next: "tutorial-farm-workers",  effects: []},
+      {text: "Farm? Our people don't need such luxuries.", next: "",  effects: []}
     ],
     requirements: [],
     repeatable: false,
@@ -1055,9 +1063,9 @@ let events = {
     type: "tutorial",
     text: "Now, assign a citizen to the farm to start producing supply (switch to 'units' view, click citizen, and assign to farm).",
     choices: [
-      {text: "Got it.", next: "", tooltip: [], effects: []}
+      {text: "Got it.", next: "",  effects: []}
     ],
-    requirements: [event_req_check_gen("tutorial-build-a-farm"), building_req_check_gen("farm", "anywhere")],
+    requirements: [event_req_check_gen("tutorial-build-a-farm"), trigger_req_check_gen("tutorial-farm-workers", "tutorial-build-a-farm"), building_req_check_gen("farm", "anywhere")],
     repeatable: false,
     status: "unseen",
     chance: 1
@@ -1070,14 +1078,14 @@ let events = {
     text: "The streets of [self_nation:name] are filthy! The citizenry are disgusted, and demand cleanliness.",
     choices: [
       //if next is an array, randomly choose next from array
-      {text: "Hire street cleaners.", next: "", tooltip: ["-5 wealth"], effects: [{type: "wealth", amount: -5}]},
-      {text: "Clean up the mess you made! Those who litter will be fined.", next: "", tooltip: ["+5 wealth, -5 happiness for 180 days"], effects: [{type: "wealth", amount: 5}, {type: "happiness", amount: -5, duration : 180}]},
-      {text: "Dirty streets build character and constitution!", next: "", tooltip: ["-3 happiness for 180 days"], effects: [{type: "happpiness", amount: -3, duration: 180}]}
+      {text: "Hire street cleaners.", next: "", effect_text: "-5 wealth", effects: [{type: "wealth", amount: -5}]},
+      {text: "Clean up the mess you made! Those who litter will be fined.", next: "", effect_text: "+5 wealth, -5 happiness for 180 days", effects: [{type: "wealth", amount: 5}, {type: "happiness", amount: -5, duration : 180}]},
+      {text: "Dirty streets build character and constitution!", next: "", effect_text: "-3 happiness for 180 days", effects: [{type: "happpiness", amount: -3, duration: 180}]}
     ],
     requirements: [],
     repeatable: true,
     status: "unseen",
-    chance: 0.05,
+    chance: 0.03,
     //chance to repeat after event has already been done
     second_chance: 0.01
   },
@@ -1087,9 +1095,9 @@ let events = {
     type: "domestic",
     text: "Now that the nation has a large reserve of wealth, we are in a good position to start issuing a currency. What should the currency be backed by?",
     choices: [
-      {text: "No one has ever gone wrong with Gold!", next: "", tooltip: ["+5 wealth"], effects: [{type: "wealth", amount: 5}]},
-      {text: "Silver!", next: "", tooltip: ["+1 permanent happiness"], effects: [{type: "happiness", amount: 1, duration : "forever"}]},
-      {text: "The yellow gold: cheese!", next: "", tooltip: ["+5 supply", "An edible currency, truly revolutionary"], effects: [{type: "supply", amount: 5}]}
+      {text: "No one has ever gone wrong with Gold!", next: "", effect_text: "+5 wealth", effects: [{type: "wealth", amount: 5}]},
+      {text: "Silver!", next: "", effect_text: "+1 permanent happiness", effects: [{type: "happiness", amount: 1, duration : "forever"}]},
+      {text: "The yellow gold: cheese!", next: "", effect_text: "+5 supply", tooltip: "An edible currency, truly revolutionary", effects: [{type: "supply", amount: 5}]}
     ],
     requirements: [wealth_req_check_gen(200)],
     repeatable: false,
@@ -1103,8 +1111,8 @@ let events = {
     text: "Some farmers accidentally uncovered the ancient tomb of King Threpanyan. Being famed for having a huge life insurance payout, his tomb certainly has a ton of bling.",
     choices: [
       //if next is an array, randomly choose next from array
-      {text: "Loot it!", next: ["royal-tomb-consequences", "royal-tomb-consequences", ""], tooltip: ["+20 wealth", "surely there will be no consequences"], effects: [{type: "wealth", amount: 20}]},
-      {text: "Give the dead some respect.", next: "", tooltip: ["king threpanyan thanks you", "his tomb is not insured"], effects: []}
+      {text: "Loot it!", next: ["royal-tomb-consequences", "royal-tomb-consequences", ""], effect_text: "+20 wealth", tooltip: "surely there will be no consequences", effects: [{type: "wealth", amount: 20}]},
+      {text: "Give the dead some respect.", next: "", tooltip: "king threpanyan thanks you, his tomb is not insured", effects: []}
     ],
     requirements: [unit_in_region_foreign_req_check_gen("any", "self", "56")],
     repeatable: false,
@@ -1119,13 +1127,13 @@ let events = {
     text: "Rumors about an old treasure hoard in [random_region:unclaimed,close] have reached [self_nation:name]. If the rumors prove true, a great wealth could be ours!",
     choices: [
       //if next is an array, randomly choose next from array
-      {text: "Prepare an expedition!", next: ["adventure-treasure-1-success", "adventure-treasure-1-fail"], tooltip: ["Send any unit to the region"], effects: []},
-      {text: "Rumors cannot be trusted.", next: "", tooltip: [], effects: [], rejected: true}
+      {text: "Prepare an expedition!", next: ["adventure-treasure-1-success", "adventure-treasure-1-fail"], tooltip: "Send any unit to the region", effects: []},
+      {text: "Rumors cannot be trusted.", next: "",  effects: [], rejected: true}
     ],
     requirements: [],
     repeatable: true,
     status: "unseen",
-    chance: 0.04,
+    chance: 0.03,
     //chance to repeat after event has already been done
     second_chance: 0.01
   },
@@ -1135,7 +1143,7 @@ let events = {
     type: "adventure",
     text: "The treasure has been found!",
     choices: [
-      {text: "Good!", next: "", tooltip: ["Gain 50 Wealth"], effects: [{type: "wealth", amount: 50}]}
+      {text: "Good!", next: "", effect_text: "+50 Wealth",  effects: [{type: "wealth", amount: 50}]}
     ],
     requirements: [trigger_req_check_gen("adventure-treasure-1-success", "adventure-treasure-1"), function() {unit_in_region_foreign_req_check_gen("any", "self", event_triggers["adventure-treasure-1"].desig)()}],
     repeatable: true,
@@ -1148,8 +1156,8 @@ let events = {
     type: "adventure",
     text: "We found... nothing.",
     choices: [
-      {text: "That's fine, the real treasure was the friends we made along the way!", next: "", tooltip: ["Increase happiness by 5% for a year"], effects: [{type: "happiness", amount: 5, duration : 360}]},
-      {text: "What a waste of time.", next: "", tooltip: [""], effects: []}
+      {text: "That's fine, the real treasure was the friends we made along the way!", next: "", effect_text: "+5% happiness for a year",  effects: [{type: "happiness", amount: 5, duration : 360}]},
+      {text: "What a waste of time.", next: "",  effects: []}
     ],
     requirements: [trigger_req_check_gen("adventure-treasure-1-fail", "adventure-treasure-1"), function() {unit_in_region_foreign_req_check_gen("any", "self", event_triggers["adventure-treasure-1"].desig)()}],
     repeatable: true,
@@ -1163,9 +1171,9 @@ let events = {
     type: "festival",
     text: "The new year brings new questions. Who to meet, what to make, what to do. And most importantly, how much to spend on the celebrations!",
     choices: [
-      {text: "We shall sponsor the celebrations.", next: "", tooltip: ["-10 wealth, +7 happiness for a year"], effects: [{type: "wealth", amount: -10}, {type: "happiness", amount: 7, duration : 360}]},
-      {text: "We shall provide food.", next: "", tooltip: ["+10 supply, +7 happiness for a year"], effects: [{type: "supply", amount: -10}, {type: "happiness", amount: 7, duration : 360}]},
-      {text: "Times are hard, nothing can be spared.", next: "", tooltip: ["what a cheapskate"], effects: []}
+      {text: "We shall sponsor the celebrations.", next: "", effect_text: "-10 wealth, +7 happiness for a year",  effects: [{type: "wealth", amount: -10}, {type: "happiness", amount: 7, duration : 360}]},
+      {text: "We shall provide food.", next: "", effect_text: "+10 supply, +7 happiness for a year",  effects: [{type: "supply", amount: -10}, {type: "happiness", amount: 7, duration : 360}]},
+      {text: "Times are hard, nothing can be spared.", next: "", tooltip: "what a cheapskate", effects: []}
     ],
     requirements: [date_modulo_req_check_gen(360)],
     repeatable: true,
@@ -1174,8 +1182,24 @@ let events = {
   },
   //weather
   //disasters
+  "bad-harvest": {
+    name: "Bad Harvest",
+    slug: "bad-harvest",
+    type: "disaster",
+    text: "The harvest this year has been terrible. The people fear they will not have enough for the coming rain season.",
+    choices: [
+      {text: "Distribute the reserves!", next: "", effect_text: "-20 supply", effects: [{type: "supply", amount: -20}]},
+      //todo: choice not to help also triggers chance of famine
+      {text: "Ok.", next: ["", ""], effect_text: "-10 happiness for 270 days", effects: [{type: "happiness", amount: -10, duration: 270}]}
+    ],
+    requirements: [season_req_check_gen("Harvest")],
+    repeatable: true,
+    status: "unseen",
+    chance: 0.025
+  },
   //foreign
   //trade
+  //bankrupcy, famine, strike, revolt
 };
 
 //development util functions
@@ -1464,7 +1488,7 @@ class TextButton {
       }
     };
     this.mousemove = function(e) {
-      if ((e.offsetX > self.coords[1][0][0] && e.offsetX < self.coords[1][1][0]) && (e.offsetY > self.coords[1][0][1] && e.offsetY < self.coords[1][1][1]) && this.display) {
+      if ((e.offsetX > self.coords[1][0][0] && e.offsetX < self.coords[1][1][0]) && (e.offsetY > self.coords[1][0][1] && e.offsetY < self.coords[1][1][1]) && self.display) {
         if (self.obey_ctd) {
           if (canvas.click_temp_disabled) return;
         }
@@ -1705,6 +1729,7 @@ class Modal {
     this.canvas = canvas;
     this.canvas.scroll_temp_disabled = true;
     this.canvas.keydown_temp_disabled = true;
+    this.click_temp_disabled_snapshot = this.canvas.click_temp_disabled;
     this.canvas.click_temp_disabled = true;
     this.canvas.touchmove_temp_disabled = true;
     //[[x, y], [x, y]]
@@ -1724,7 +1749,12 @@ class Modal {
     //reenable map stuff
     this.canvas.scroll_temp_disabled = false;
     this.canvas.keydown_temp_disabled = false;
-    this.canvas.click_temp_disabled = false;
+    //to prevent issue when two modals are opened
+    //when modal closed, click is only reenabled if at the beginning it was already enabled (modal already opened)
+    //if at beginning it was disabled, leave it disabled
+    if (!this.click_temp_disabled_snapshot) {
+      this.canvas.click_temp_disabled = false;
+    }
     this.canvas.touchmove_temp_disabled = false;
     //set cursor back to normal
     document.body.style.cursor = "default";
@@ -1875,7 +1905,7 @@ function toggleOverlay() {
     //settings cog
     let settings_btn = new ImageButton(canvas, [160, 653], [65, 38], false, settingsImage, create_settings_modal, true);
     overlay2_objects.push(settings_btn);
-    let logs_btn = new ImageButton(canvas, [92, 653], [64, 38], false, logsImage, function() {}, true);
+    let logs_btn = new ImageButton(canvas, [92, 653], [64, 38], false, logsImage, create_event_logs_modal, true);
     overlay2_objects.push(logs_btn);
   } else if (window.gameOverlayObject.image_url === "/images/nnom_overlay2.png") {
     window.gameOverlayObject.image_url = "/images/nnom_overlay.png";
@@ -2477,7 +2507,6 @@ class Unit {
             this.remove();
           }
           for (let r=0; r < this.move_amount; r++) {
-            //todo: special logic if citizen has task?
             let r_i = regions_info[this.region_desig].foreign_units[this.nation].unhoused.findIndex(function(item) {
               return item.name === self.type;
             });
@@ -2716,17 +2745,17 @@ class Unit {
     } else if (this.foreign) {
       //foreign units
       let base_center_coord = [avg_p[0]+45, avg_p[1]-80];
+      //find what other foreign units are currently in province, then rotate
       let f_index;
       let f_count = 0;
       let f_units_num = 0;
-      //find what other foreign units are currently in province, then rotate
-      //todo: fix, use foreign_units.numbers instead
       let foreign_u = regions_info[this.region_desig].foreign_units;
+      //loop through countries that have foreign units
       for (let c_num=0; c_num < Object.keys(foreign_u).length; c_num++) {
         let nation = Object.keys(foreign_u)[c_num];
         let nation_f_u = foreign_u[nation];
         if (nation === this.nation) {
-          f_index = Object.keys(nation_f_u).indexOf(nation_f_u.numbers[this.type])+f_count;
+          f_index = Object.keys(nation_f_u.numbers).indexOf(nation_f_u.numbers[this.type])+f_count;
         }
         f_count += Object.keys(nation_f_u.numbers).length;
       }
@@ -4168,6 +4197,19 @@ function calculate_happiness() {
         break;
     }
   }
+  //check statuses
+  for (let s=0; s < self_nation.statuses.length; s++) {
+    let status = self_nation.statuses[s];
+    if (window.ticks > status.duration+status.start) {
+      //remove status
+      self_nation.statuses.splice(self_nation.statuses.findIndex(status), 1);
+      continue;
+    }
+    if (status.type === "happiness") {
+      calculated_happiness += status.amount;
+    }
+    //and more later
+  }
   //it is a percentage so it cannot go below or above certain levels
   if (calculated_happiness > 100) {
     calculated_happiness = 100;
@@ -5170,24 +5212,42 @@ let desig_needed_decisions = {"adventure-treasure-1": ""};
 function handle_choice(event_slug, event_choice) {
   events[event_slug].status = "completed";
   if (typeof event_choice.next !== "string") {
-    let trigger = {next: event_choice.next[Math.floor(Math.random() * event_choice.next.length)]};
-    if (desig_needed_decisions[event_slug]) {
-      trigger.desig = desig_needed_decisions[event_slug]
+    let event_next = event_choice.next[Math.floor(Math.random() * event_choice.next.length)];
+    if (event_next !== "") {
+      let trigger = {next: event_next};
+      if (desig_needed_decisions[event_slug]) {
+        trigger.desig = desig_needed_decisions[event_slug]
+      }
+      event_triggers[event_slug] = trigger;
     }
-    event_triggers[event_slug] = trigger;
+  } else if (event_choice.next !== "") {
+    event_triggers[event_slug] = {
+      next: event_choice.next
+    };
   }
   //handle effects
   for (let e=0; e < event_choice.effects.length; e++) {
     let effect = event_choice.effects[e];
     if (effect.type === "wealth") {
-      //
+      self_nation.wealth += effect.amount;
     } else if (effect.type === "supply") {
-      //
+      self_nation.supply += effect.amount;
     } else if (effect.type === "happiness") {
-      //self_nation.effects for happiness modifiers
-      //
+      //self_nation.statuses for happiness modifiers
+      self_nation.statuses.push({
+        type: "happiness",
+        amount: effect.amount,
+        duration: effect.duration,
+        start: window.ticks
+      });
     }
   }
+  //add to event history
+  event_history.push({
+    slug: event_slug,
+    date: window.ticks,
+    choice: event_choice
+  });
 }
 
 /**
@@ -5222,6 +5282,7 @@ function sub(text, event_slug) {
  * @param {Object} event `events` member
  */
 function create_event_modal(event) {
+  let speed_snapshot = speed_selected_indicator.speed;
   game_pause_button();
   //let settings_modal = new Modal(canvas, [[100, 100], [canvas.canvas.width-100, canvas.canvas.height-100]], "white", true, 0.7, "black");
   let event_modal = new Modal(canvas, [[300, 150], [canvas.canvas.width-300, canvas.canvas.height-150]], "white", false, 0.7, "black");
@@ -5229,16 +5290,49 @@ function create_event_modal(event) {
   let name_width = canvas.context.measureText(event.name).width;
   let name = new Text(canvas, [Math.round(600-(name_width/2)), 200], event.name, "35px Arial", "black", false, 450, undefined);
   event_modal.members.push(name);
-  let event_text = sub(event.text);
+  let event_text = sub(event.text, event.slug);
   let text = new Paragraph(canvas, event_text, "18px Arial", "black", [360, 230], 480);
   event_modal.members.push(text);
   for (let i=0; i < event.choices.length; i++) {
     let choice = event.choices[i];
     let choice_btn = new TextButton(canvas, [[365, 460+i*25], [[360, 445+i*25], [840, 465+i*25]]], choice.text, "16px Arial", "#98a5a4", "black", "#141414", false, "black", false, function() {
-      normal_speed_button();
+      //unpause and revert to previous speed
+      if (speed_snapshot === "pause") {
+        game_pause_button();
+      } else if (speed_snapshot === "normal") {
+        normal_speed_button();
+      } else if (speed_snapshot === "fast") {
+        fast_forward_button();
+      }
       handle_choice(event.slug, choice);
       event_modal.close();
-    }, false)
+    }, false);
+    if (choice.effect_text) {
+      let choice_interval_id = setInterval(function() {
+        if (!canvas.components.includes(choice_btn)) {
+          clearInterval(choice_interval_id);
+          return;
+        }
+        if (choice_btn.text === choice.text) {
+          choice_btn.text = choice.effect_text;
+        } else {
+          choice_btn.text = choice.text;
+        }
+      }, 3000);
+    }
+    let old_choice_mousemove = choice_btn.mousemove;
+    choice_btn.mousemove = function(e) {
+      let feedback_snapshot = choice_btn.feedback;
+      old_choice_mousemove(e);
+      if (choice.tooltip) {
+        if (feedback_snapshot === false && choice_btn.feedback === true) {
+          //mouse left
+          choice_btn.canvas.canvas.title = "";
+        } else if (choice_btn.feedback) {
+          choice_btn.canvas.canvas.title = choice.tooltip;
+        }
+      }
+    };
     event_modal.members.push(choice_btn);
   }
 }
@@ -5247,7 +5341,15 @@ function create_event_logs_modal() {
   let event_logs_modal = new Modal(canvas, [[100, 100], [canvas.canvas.width-100, canvas.canvas.height-100]], "white", true, 0.7, "black");
   let close_button = new TextButton(canvas, [[event_logs_modal.coords[1][0]-47, event_logs_modal.coords[0][1]+47], [[event_logs_modal.coords[1][0]-50, event_logs_modal.coords[0][1]+10], [event_logs_modal.coords[1][0]-10, event_logs_modal.coords[0][1]+50]]], "x", "34px Arial", false, "black", "#041616", false, false, true, event_logs_modal.close, false);
   event_logs_modal.members.push(close_button);
-  //
+  let name = new Text(canvas, [150, 150], "Event Logs", "35px Arial", "black", false, 200, undefined);
+  event_logs_modal.members.push(name);
+  let last_events = event_history.slice(-5);
+  last_events.reverse();
+  for (let i=0; i < last_events.length; i++) {
+    let event_info = new Paragraph(canvas, "Event: "+last_events[i].slug+", Date: "+String(last_events[i].date)+", Choice: "+last_events[i].choice.text, "20px Arial", "black", [150, 200+25*i], 600, undefined, false, false);
+    event_logs_modal.members.push(event_info)
+  }
+  //todo: scrollbox to see full event history
 }
 
 window.settings = {
