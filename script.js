@@ -138,7 +138,7 @@ const units_info = {
     "convert_into": 20,
     "speed": 30,
     "base_upkeep": {
-      "supply": 1,
+      "supply": 1.25,
       "wealth": 0
     }
   },
@@ -147,7 +147,7 @@ const units_info = {
     "speed": 30,
     "colonize_base": 180,
     "base_upkeep": {
-      "supply": 0.5,
+      "supply": 0.75,
       "wealth": 0
     }
   },
@@ -155,7 +155,7 @@ const units_info = {
     "convert_into": 60,
     "speed": 30,
     "base_upkeep": {
-      "supply": 1,
+      "supply": 1.25,
       "wealth": 0.5
     }
   },
@@ -936,6 +936,28 @@ function building_req_check_gen(type, desigs) {
 }
 
 /**
+ * @param {string} type
+ * @param {string[] | string} desigs
+ */
+function unit_req_check_gen(type, desigs) {
+  if (desigs === "anywhere") {
+    desigs = self_nation.owned_regions;
+  }
+  return function() {
+    //if this type of unit is housed anywhere
+    for (let i=0; i < desigs.length; i++) {
+      let r_us = regions_info[desigs[i]].units;
+      if (r_us[type]) {
+        if (r_us[type] > 0) {
+          return true;
+        }
+      }
+    }
+    return false;
+  };
+}
+
+/**
  * @param {string} unit
  * @param {string} nation
  * @param {string} desig
@@ -1053,7 +1075,7 @@ let events = {
     ],
     requirements: [],
     repeatable: false,
-    //"unseen", "in progress", "completed", "rejected"
+    //"unseen", "in progress", "completed"
     status: "unseen",
     chance: 1
   },
@@ -1079,13 +1101,13 @@ let events = {
     choices: [
       //if next is an array, randomly choose next from array
       {text: "Hire street cleaners.", next: "", effect_text: "-5 wealth", effects: [{type: "wealth", amount: -5}]},
-      {text: "Clean up the mess you made! Those who litter will be fined.", next: "", effect_text: "+5 wealth, -5 happiness for 180 days", effects: [{type: "wealth", amount: 5}, {type: "happiness", amount: -5, duration : 180}]},
+      {text: "Clean up the mess you made! Those who litter will be fined.", next: "", effect_text: "+5 wealth, -5 happiness for 180 days", effects: [{type: "wealth", amount: 5}, {type: "happiness", amount: -5, duration: 180}]},
       {text: "Dirty streets build character and constitution!", next: "", effect_text: "-3 happiness for 180 days", effects: [{type: "happpiness", amount: -3, duration: 180}]}
     ],
     requirements: [],
     repeatable: true,
     status: "unseen",
-    chance: 0.03,
+    chance: 0.025,
     //chance to repeat after event has already been done
     second_chance: 0.01
   },
@@ -1096,7 +1118,7 @@ let events = {
     text: "Now that the nation has a large reserve of wealth, we are in a good position to start issuing a currency. What should the currency be backed by?",
     choices: [
       {text: "No one has ever gone wrong with Gold!", next: "", effect_text: "+5 wealth", effects: [{type: "wealth", amount: 5}]},
-      {text: "Silver!", next: "", effect_text: "+1 permanent happiness", effects: [{type: "happiness", amount: 1, duration : "forever"}]},
+      {text: "Silver!", next: "", effect_text: "+1 permanent happiness", effects: [{type: "happiness", amount: 1, duration: "forever"}]},
       {text: "The yellow gold: cheese!", next: "", effect_text: "+5 supply", tooltip: "An edible currency, truly revolutionary", effects: [{type: "supply", amount: 5}]}
     ],
     requirements: [wealth_req_check_gen(200)],
@@ -1111,13 +1133,30 @@ let events = {
     text: "Some farmers accidentally uncovered the ancient tomb of King Threpanyan. Being famed for having a huge life insurance payout, his tomb certainly has a ton of bling.",
     choices: [
       //if next is an array, randomly choose next from array
-      {text: "Loot it!", next: ["royal-tomb-consequences", "royal-tomb-consequences", ""], effect_text: "+20 wealth", tooltip: "surely there will be no consequences", effects: [{type: "wealth", amount: 20}]},
+      {text: "Loot it!", next: ["royal-tomb-consequences", "royal-tomb-consequences", ""], effect_text: "+40 wealth", tooltip: "surely there will be no consequences", effects: [{type: "wealth", amount: 40}]},
       {text: "Give the dead some respect.", next: "", tooltip: "king threpanyan thanks you, his tomb is not insured", effects: []}
     ],
     requirements: [unit_in_region_foreign_req_check_gen("any", "self", "56")],
     repeatable: false,
     status: "unseen",
-    chance: 0.2
+    chance: 0.125
+  },
+  "excess-wealth": {
+    name: "Excess Wealth",
+    slug: "excess-wealth",
+    //also similar to trade type
+    type: "domestic",
+    text: "Some of the merchants of [self_nation:name] have amassed significant amounts of wealth...",
+    choices: [
+      {text: "Tax it away!", next: "", effect_text: "+10 wealth, -5 happiness for a year", tooltip: "", effects: [{type: "wealth", amount: 10}, {type: "happiness", amount: -5, duration: 360}]},
+      {text: "It should be redistributed among the people.", next: "", effect_text: "+5 happiness for a year", tooltip: "Freeman and slave, patrician and plebeian, lord and serf, guild-master and journeyman", effects: [{type: "happiness", amount: 5, duration: 360}]},
+      {text: "Let them enjoy it.", next: "", tooltip: "thank you -jeff bezos", effects: []}
+    ],
+    requirements: [unit_req_check_gen("merchant", "anywhere")],
+    repeatable: true,
+    status: "unseen",
+    chance: 0.02,
+    second_chance: 0.005
   },
   //adventures!
   "adventure-treasure-1": {
@@ -1128,12 +1167,12 @@ let events = {
     choices: [
       //if next is an array, randomly choose next from array
       {text: "Prepare an expedition!", next: ["adventure-treasure-1-success", "adventure-treasure-1-fail"], tooltip: "Send any unit to the region", effects: []},
-      {text: "Rumors cannot be trusted.", next: "",  effects: [], rejected: true}
+      {text: "Rumors cannot be trusted.", next: "",  effects: []}
     ],
     requirements: [],
     repeatable: true,
     status: "unseen",
-    chance: 0.03,
+    chance: 0.025,
     //chance to repeat after event has already been done
     second_chance: 0.01
   },
@@ -1145,7 +1184,7 @@ let events = {
     choices: [
       {text: "Good!", next: "", effect_text: "+50 Wealth",  effects: [{type: "wealth", amount: 50}]}
     ],
-    requirements: [trigger_req_check_gen("adventure-treasure-1-success", "adventure-treasure-1"), function() {unit_in_region_foreign_req_check_gen("any", "self", event_triggers["adventure-treasure-1"].desig)()}],
+    requirements: [trigger_req_check_gen("adventure-treasure-1-success", "adventure-treasure-1"), function() { return unit_in_region_foreign_req_check_gen("any", "self", event_triggers["adventure-treasure-1"].desig)(); }],
     repeatable: true,
     status: "unseen",
     chance: 1
@@ -1156,10 +1195,10 @@ let events = {
     type: "adventure",
     text: "We found... nothing.",
     choices: [
-      {text: "That's fine, the real treasure was the friends we made along the way!", next: "", effect_text: "+5% happiness for a year",  effects: [{type: "happiness", amount: 5, duration : 360}]},
+      {text: "That's fine, the real treasure was the friends we made along the way!", next: "", effect_text: "+5% happiness for a year",  effects: [{type: "happiness", amount: 5, duration: 360}]},
       {text: "What a waste of time.", next: "",  effects: []}
     ],
-    requirements: [trigger_req_check_gen("adventure-treasure-1-fail", "adventure-treasure-1"), function() {unit_in_region_foreign_req_check_gen("any", "self", event_triggers["adventure-treasure-1"].desig)()}],
+    requirements: [trigger_req_check_gen("adventure-treasure-1-fail", "adventure-treasure-1"), function() { return unit_in_region_foreign_req_check_gen("any", "self", event_triggers["adventure-treasure-1"].desig)() }],
     repeatable: true,
     status: "unseen",
     chance: 1
@@ -1171,8 +1210,8 @@ let events = {
     type: "festival",
     text: "The new year brings new questions. Who to meet, what to make, what to do. And most importantly, how much to spend on the celebrations!",
     choices: [
-      {text: "We shall sponsor the celebrations.", next: "", effect_text: "-10 wealth, +7 happiness for a year",  effects: [{type: "wealth", amount: -10}, {type: "happiness", amount: 7, duration : 360}]},
-      {text: "We shall provide food.", next: "", effect_text: "+10 supply, +7 happiness for a year",  effects: [{type: "supply", amount: -10}, {type: "happiness", amount: 7, duration : 360}]},
+      {text: "We shall sponsor the celebrations.", next: "", effect_text: "-10 wealth, +7 happiness for a year",  effects: [{type: "wealth", amount: -10}, {type: "happiness", amount: 7, duration: 360}]},
+      {text: "We shall provide food.", next: "", effect_text: "+10 supply, +7 happiness for a year",  effects: [{type: "supply", amount: -10}, {type: "happiness", amount: 7, duration: 360}]},
       {text: "Times are hard, nothing can be spared.", next: "", tooltip: "what a cheapskate", effects: []}
     ],
     requirements: [date_modulo_req_check_gen(360)],
@@ -3693,6 +3732,7 @@ class ConstructionCard {
     this.canvas.context.font = this.text_infos[3][0];
     this.canvas.context.fillStyle = this.text_infos[3][1];
     this.canvas.context.fillText("Wealth: "+String(this.cost.wealth)+", Supply: "+String(this.cost.supply)+", Build Time: "+String(this.cost.duration), this.coords[0][0]+10, text_y, this.coords[2]-50);
+    //todo: replace all of above with Paragraph?
   }
   customtextchange(text_obj) {
     if (text_obj.detail[this.identity]) {
@@ -3887,7 +3927,7 @@ function check_events() {
       if (Math.random() < event.chance) {
         do_event = true;
       }
-    } else if ((event.status === "complete" || event.status === "rejected") && event.repeatable) {
+    } else if ((event.status === "complete") && event.repeatable) {
       if (event.second_chance) {
         if (Math.random() < event.second_chance) {
           do_event = true;
@@ -5259,6 +5299,7 @@ function sub(text, event_slug) {
     let r_num = "56";
     let region_o = Number(self_nation.owned_regions[0]);
     for (let i=0; i < 5; i++) {
+      //check if region exists, if so, and no owner, choose it
       if (regions_info[String(region_o+(i+1))]) {
         if (regions_info[String(region_o+(i+1))].owner === "") {
           r_num = String(region_o+(i+1));
@@ -5272,8 +5313,9 @@ function sub(text, event_slug) {
         }
       }
     }
-    desig_needed_decisions[event_slug].desig = r_num;
-    text = text.replace("[random_region:unclaimed,close]", desig_needed_decisions[event_slug].desig);
+    desig_needed_decisions[event_slug] = r_num;
+    console.log(desig_needed_decisions[event_slug])
+    text = text.replace("[random_region:unclaimed,close]", desig_needed_decisions[event_slug]);
   }
   return text.replace("[self_nation:name]", self_nation.name);
 }
@@ -5285,17 +5327,17 @@ function create_event_modal(event) {
   let speed_snapshot = speed_selected_indicator.speed;
   game_pause_button();
   //let settings_modal = new Modal(canvas, [[100, 100], [canvas.canvas.width-100, canvas.canvas.height-100]], "white", true, 0.7, "black");
-  let event_modal = new Modal(canvas, [[300, 150], [canvas.canvas.width-300, canvas.canvas.height-150]], "white", false, 0.7, "black");
+  let event_modal = new Modal(canvas, [[275, 150], [canvas.canvas.width-275, canvas.canvas.height-150]], "white", false, 0.7, "black");
   canvas.context.font = "35px Arial";
   let name_width = canvas.context.measureText(event.name).width;
   let name = new Text(canvas, [Math.round(600-(name_width/2)), 200], event.name, "35px Arial", "black", false, 450, undefined);
   event_modal.members.push(name);
   let event_text = sub(event.text, event.slug);
-  let text = new Paragraph(canvas, event_text, "18px Arial", "black", [360, 230], 480);
+  let text = new Paragraph(canvas, event_text, "18px Arial", "black", [335, 230], 530);
   event_modal.members.push(text);
   for (let i=0; i < event.choices.length; i++) {
     let choice = event.choices[i];
-    let choice_btn = new TextButton(canvas, [[365, 460+i*25], [[360, 445+i*25], [840, 465+i*25]]], choice.text, "16px Arial", "#98a5a4", "black", "#141414", false, "black", false, function() {
+    let choice_btn = new TextButton(canvas, [[340, 460+i*25], [[335, 445+i*25], [865, 465+i*25]]], choice.text, "16px Arial", "#98a5a4", "black", "#141414", false, "black", false, function() {
       //unpause and revert to previous speed
       if (speed_snapshot === "pause") {
         game_pause_button();
@@ -5343,7 +5385,7 @@ function create_event_logs_modal() {
   event_logs_modal.members.push(close_button);
   let name = new Text(canvas, [150, 150], "Event Logs", "35px Arial", "black", false, 200, undefined);
   event_logs_modal.members.push(name);
-  let last_events = event_history.slice(-5);
+  let last_events = event_history.slice(-7);
   last_events.reverse();
   for (let i=0; i < last_events.length; i++) {
     let event_info = new Paragraph(canvas, "Event: "+last_events[i].slug+", Date: "+String(last_events[i].date)+", Choice: "+last_events[i].choice.text, "20px Arial", "black", [150, 200+25*i], 600, undefined, false, false);
@@ -5355,7 +5397,12 @@ function create_event_logs_modal() {
 window.settings = {
   shadow: true,
   negative_coords: false,
-  gradient: true
+  gradient: true,
+  multiplayer: {
+    server: false,
+    game_id: false,
+    player_id: false
+  }
 };
 
 function create_settings_modal() {
@@ -5752,6 +5799,11 @@ function set_nation(name_input, slogan_input, color_input) {
     "currently_upgrading": false,
     "homes": [make_citizen(window.starting_region, "settlement"), make_citizen(window.starting_region, "settlement"), make_citizen(window.starting_region, "settlement")]
   });
+}
+
+//if players choose multiplayer in selection part 2
+function multiplayer_scene() {
+  //enter server url and game id
 }
 
 /**
