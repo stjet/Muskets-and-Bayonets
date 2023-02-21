@@ -1335,15 +1335,20 @@ class Canvas {
   /**
    * @param {number[]} size
    * @param {string} id
+   * @param {HTMLElement} parent
    */
-  constructor(size, id, contextOptions=undefined) {
+  constructor(size, id, parent=undefined, contextOptions=undefined) {
     this.size = size;
     this.canvas = document.createElement("CANVAS");
     this.canvas.id = id;
     this.canvas.width = size[0];
     this.canvas.height = size[1];
     this.canvas.tabIndex = 1;
-    document.body.appendChild(this.canvas);
+    if (!parent) {
+      document.body.appendChild(this.canvas);
+    } else {
+      parent.appendChild(this.canvas);
+    }
     this.context = this.canvas.getContext('2d', contextOptions);
     this.components = [];
     this.events = {};
@@ -5455,6 +5460,31 @@ function point_in_region(p, desig) {
   return in_region;
 }
 
+function translate_bounds_check() {
+  //honestly I tried doing this logically but it didn't work. so I just trialed and errored a bit
+  if (window.gameTranslate[0] > 2300) {
+    window.gameTranslate[0] = 2300;
+  }
+  if (window.gameTranslate[1] > 2300) {
+    window.gameTranslate[1] = 2300;
+  }
+  if (window.settings.negative_coords) {
+    if (window.gameTranslate[0] < -1700) {
+      window.gameTranslate[0] = -1700;
+    }
+    if (window.gameTranslate[1] < -700) {
+      window.gameTranslate[1] = -700;
+    }
+  } else {
+    if (window.gameTranslate[0] < 0) {
+      window.gameTranslate[0] = 0;
+    }
+    if (window.gameTranslate[1] < 0) {
+      window.gameTranslate[1] = 0;
+    }
+  }
+}
+
 function game_scene() {
   window.gameScaleFactor = 1.5;
   window.gameTranslate = [0, 0];
@@ -5499,7 +5529,18 @@ function game_scene() {
       window.gameScaleFactor = 0.25;
     } else if (window.gameScaleFactor > 2.5) {
       window.gameScaleFactor = 2.5;
+    } else if (e.deltaY < 0) {
+      //window.gameTranslate[0] += Math.round(e.offsetX/2*0.025);
+      //window.gameTranslate[1] += Math.round(e.offsetY/2*0.025);
+      //window.gameTranslate[0] += 600*(window.gameScaleFactor+0.025)-600*(window.gameScaleFactor);
+      //window.gameTranslate[1] += 450*(window.gameScaleFactor+0.025)-450*(window.gameScaleFactor);
+      window.gameTranslate[0] += e.offsetX*(window.gameScaleFactor+0.025)-e.offsetX*(window.gameScaleFactor);
+      window.gameTranslate[1] += e.offsetY*(window.gameScaleFactor+0.025)-e.offsetY*(window.gameScaleFactor);
+    } else if (e.deltaY > 0) {
+      window.gameTranslate[0] -= e.offsetX*(window.gameScaleFactor)-e.offsetX*(window.gameScaleFactor-0.025);
+      window.gameTranslate[1] -= e.offsetY*(window.gameScaleFactor)-e.offsetY*(window.gameScaleFactor-0.025);
     }
+    translate_bounds_check();
   }
   canvas.keydown_temp_disabled = false;
   //keeps track of the pressed keys
@@ -5537,25 +5578,7 @@ function game_scene() {
           break;
         default: break;
       }
-      //honestly I tried doing this logically but it didn't work. so I just trialed and errored a bit
-      if (window.gameTranslate[0] > 2300) {
-        window.gameTranslate[0] = 2300;
-      } else if (window.gameTranslate[1] > 2300) {
-        window.gameTranslate[1] = 2300;
-      }
-      if (window.settings.negative_coords) {
-        if (window.gameTranslate[0] < -1700) {
-          window.gameTranslate[0] = -1700;
-        } else if (window.gameTranslate[1] < -700) {
-          window.gameTranslate[1] = -700;
-        }
-      } else {
-        if (window.gameTranslate[0] < 0) {
-          window.gameTranslate[0] = 0;
-        }  else if (window.gameTranslate[1] < 0) {
-          window.gameTranslate[1] = 0;
-        }
-      }
+      translate_bounds_check();
     }
     movement_handling(e.key);
     let directional_keys = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "w", "a", "s", "d"];
