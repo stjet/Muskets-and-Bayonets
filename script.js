@@ -1037,6 +1037,16 @@ function wealth_req_check_gen(wealth) {
   }
 }
 
+/**
+ * @param {number} lower_range
+ * @param {number?} upper_range
+ */
+function happiness_range_req_check_gen(lower_range, upper_range=1) {
+  return function() {
+    return self_nation.happiness >= lower_range && self_nation.happiness <= upper_range;
+  }
+}
+
 let event_triggers = {
   //for example, either {next: "adventure-treasure-1-success", desig: "15"} or {next: "adventure-treasure-1-fail", desig: 74}, or false, if unencountered
   //the desig is not required ofc, just additional info
@@ -1219,6 +1229,19 @@ let events = {
     status: "unseen",
     chance: 1
   },
+  "celebration-of-prosperity": {
+    name: "Celebration of Prosperity",
+    slug: "celebration-of-prosperity",
+    type: "festival",
+    text: "The nation is prospering, and happiness is extremely high! A festival has been organized to celebrate this.",
+    choices: [
+      {text: "Fantastic!", next: "", effects: []}
+    ],
+    requirements: [happiness_range_req_check_gen(90), wealth_req_check_gen(150)],
+    repeatable: false,
+    status: "unseen",
+    chance: 0.025
+  },
   //weather
   //disasters
   "bad-harvest": {
@@ -1238,6 +1261,21 @@ let events = {
   },
   //foreign
   //trade
+  //protests, polls
+  "apathetic-polls": {
+    name: "Apathetic Polls",
+    slug: "apathetic-polls",
+    type: "polls",
+    text: "The polls are in, and the people are... completely apathetic. Of those who bothered to respond, answers included responses like \"Government? Are we still doing that?\" and \"If I answer, will you stop knocking on my door?\".",
+    choices: [
+      {text: "Well, better apathetic than angry.", next: "", effects: []},
+      {text: "We must do better!", next: "", effects: []}
+    ],
+    requirements: [happiness_range_req_check_gen(45, 55)],
+    repeatable: true,
+    status: "unseen",
+    chance: 0.01
+  },
   //bankrupcy, famine, strike, revolt
 };
 
@@ -1286,6 +1324,9 @@ class Point {
 }
 
 //non dev util functions
+/**
+ * @returns {bool}
+ */
 function is_mobile() {
   if (navigator.userAgent) {
     let mobile_uas = ["iPhone", "iPad", "iPod", "Mobile Safari", "Android", "Blackberry", "Opera Mini", "IEMobile", "Blackberry", "SamsungBrowser"];
@@ -1298,6 +1339,11 @@ function is_mobile() {
   return false;
 }
 
+/**
+ * @param {number[]} p1 
+ * @param {number[]} p2 
+ * @returns {number}
+ */
 function distance(p1, p2) {
   return Math.round(Math.sqrt((Math.abs(p1[0]-p2[0])**2)+(Math.abs(p1[1]-p2[1])**2)));
 }
@@ -1328,6 +1374,25 @@ Array.prototype.pushOrder = function(item, priority) {
       canvas.components.splice(overlay_index, 0, item);
     }
   }
+}
+
+//military functions
+/**
+ * @param {number} dice_num
+ */
+function roll_dice(dice_num=1) {
+  let rolls = [];
+  let total = 0;
+  //roll a d6
+  for (let i=0; i < dice_num; i++) {
+    let roll = Math.floor(Math.random()*6)+1;
+    total += roll;
+    rolls.push(roll);
+  }
+  return {
+    rolls: rolls,
+    total: total
+  };
 }
 
 //classes
@@ -1854,6 +1919,7 @@ class Modal {
 /**
  * @param {number[][]} coords
  * @param {number} scale
+ * @returns {number[][]}
  */
 function scaleCoords(coords, scale) {
   //this scales relative to [0,0]. Maybe do it relative to the center of canvas? Dunno
@@ -1868,6 +1934,7 @@ function scaleCoords(coords, scale) {
 /**
  * @param {number[][]} coords
  * @param {number} translate
+ * @returns {number[][]}
  */
 function translateCoords(coords, translate) {
   //coords: [[x, y], [x, y]]
@@ -1879,6 +1946,12 @@ function translateCoords(coords, translate) {
 }
 
 //clockwise
+/**
+ * @param {number[]} coord
+ * @param {number[]} center
+ * @param {number} rad
+ * @returns {number[]}
+ */
 function rotateCoord(coord, center, rad) {
   //translate center to origin
   let trans_coord = [coord[0]-center[0], coord[1]-center[1]];
@@ -1894,6 +1967,7 @@ function rotateCoord(coord, center, rad) {
 //find center point of a region
 /**
  * @param {string} region_desig
+ * @returns {number[]}
  */
 function findAveragePoint(region_desig) {
   let coords = regions_info[region_desig].coords;
@@ -2299,6 +2373,7 @@ class UnitCard {
 /**
  * @param {string} nation
  * @param {string} desig
+ * @returns {bool}
  */
 function colonizable(nation, desig) {
   //check to see if region already owned
@@ -2337,6 +2412,7 @@ function colonizable(nation, desig) {
 
 /**
  * @param {string} desig
+ * @returns {bool}
  */
 function sea_accessible_only(desig) {
   let non_sea = regions_info[desig].neighbors.findIndex(function(item) {
@@ -2418,6 +2494,9 @@ function pathfind(from, to, sea=false) {
   }
 */
 
+/**
+ * @returns {string}
+ */
 function get_move_id() {
   window.move_ids++;
   let mid = String(window.move_ids);
@@ -2434,6 +2513,7 @@ function get_move_id() {
  * @param {string} to to region desig
  * @param {bool | undefined} to_path already defined path?
  * @param {bool | undefined} sea whether to pathfind through sea
+ * @returns {bool}
  */
 function move_unit(nation, type, amount, desig, to, to_path=false, sea=false) {
   //remove
@@ -4253,7 +4333,8 @@ function calculate_happiness() {
     if (status.type === "happiness") {
       calculated_happiness += status.amount;
     }
-    //and more later
+    //and more later (production boosts, recruitment time shortened)
+    //
   }
   //it is a percentage so it cannot go below or above certain levels
   if (calculated_happiness > 100) {
@@ -4265,9 +4346,12 @@ function calculate_happiness() {
   canvas.canvas.dispatchEvent(new CustomEvent("customtextchange", {detail: {"happiness-display": "Happiness: "+String(self_nation.happiness)+"%"}}));
 }
 
+//todo: apply happiness
 //UNHOUSED_UPKEEP_MULT
 //subtract supply for units, and subtract even more for units that are moving, unhoused
 function upkeep() {
+  let wealth_subtract = 0;
+  let supply_subtract = 0;
   //should use .values() instead but w/e
   for (let r=0; r < Object.keys(regions_info).length; r++) {
     let r_info = regions_info[Object.keys(regions_info)[r]];
@@ -4277,8 +4361,8 @@ function upkeep() {
       let h_name = Object.keys(r_info.units)[h];
       let h_quant = r_info.units[h_name];
       if (r_info.owner === "self") {
-        self_nation.wealth -= units_info[h_name].base_upkeep.wealth*h_quant/3;
-        self_nation.supply -= units_info[h_name].base_upkeep.supply*h_quant/3;
+        wealth_subtract -= units_info[h_name].base_upkeep.wealth*h_quant/3;
+        supply_subtract -= units_info[h_name].base_upkeep.supply*h_quant/3;
       }
     }
     //check foreign units
@@ -4291,8 +4375,8 @@ function upkeep() {
         let n_unit_name = Object.keys(unit_numbers)[cu];
         let n_unit_num = unit_numbers[n_unit_name];
         if (n_name === "self") {
-          self_nation.wealth -= units_info[n_unit_name].base_upkeep.wealth*n_unit_num*UNHOUSED_UPKEEP_MULT/3;
-          self_nation.supply -= units_info[n_unit_name].base_upkeep.supply*n_unit_num*UNHOUSED_UPKEEP_MULT/3;
+          wealth_subtract -= units_info[n_unit_name].base_upkeep.wealth*n_unit_num*UNHOUSED_UPKEEP_MULT/3;
+          supply_subtract -= units_info[n_unit_name].base_upkeep.supply*n_unit_num*UNHOUSED_UPKEEP_MULT/3;
         }
       }
     }
@@ -4303,16 +4387,24 @@ function upkeep() {
     let mid = Object.keys(unit_movements)[m];
     let m_info = unit_movements[mid];
     if (m_info.nation === "self") {
-      self_nation.wealth -= units_info[m_info.type].base_upkeep.wealth*m_info.amount*UNHOUSED_UPKEEP_MULT/3;
-      self_nation.supply -= units_info[m_info.type].base_upkeep.supply*m_info.amount*UNHOUSED_UPKEEP_MULT/3;
+      wealth_subtract -= units_info[m_info.type].base_upkeep.wealth*m_info.amount*UNHOUSED_UPKEEP_MULT/3;
+      supply_subtract -= units_info[m_info.type].base_upkeep.supply*m_info.amount*UNHOUSED_UPKEEP_MULT/3;
     }
   }
+  //happiness upkeep reduction affects all units not just military ones
+  if (self_nation.happiness >= 95) {
+    wealth_subtract = wealth_subtract*0.95;
+    supply_subtract = supply_subtract*0.95;
+  }
+  self_nation.wealth -= wealth_subtract;
+  self_nation.supply -= supply_subtract;
 }
 
 /**
  * @param {number} pay_period 
  */
 function residence_tax_payment(pay_period) {
+  let wealth_add = 0;
   for (let i=0; i < self_nation.owned_regions.length; i++) {
     let o_region = regions_info[self_nation.owned_regions[i]];
     let citizens = 0;
@@ -4324,11 +4416,17 @@ function residence_tax_payment(pay_period) {
         }).length;
       }
     }
-    self_nation.wealth += (o_region.residence_tax * citizens) / pay_period;
+    wealth_add += (o_region.residence_tax * citizens) / pay_period;
   }
+  if (self_nation.happiness < 40) {
+    //reduced by 10%
+    wealth_add = Math.round(wealth_add*0.9);
+  }
+  self_nation.wealth += wealth_add;
 }
 
 function unit_production() {
+  let supply_add = 0;
   for (let i=0; i < self_nation.owned_regions.length; i++) {
     let o_region = regions_info[self_nation.owned_regions[i]];
     for (let j=0; j < o_region.buildings.length; j++) {
@@ -4344,11 +4442,24 @@ function unit_production() {
         }
         if (o_b_info.pr.su > 0) {
           //multiply by amount of citizens working there
-          self_nation.supply += o_b_info.pr.su*o_building.workers;
+          supply_add += o_b_info.pr.su*o_building.workers;
         }
       }
     }
   }
+  //happiness affects production
+  if (self_nation.happiness >= 95) {
+    //10% more productive
+    supply_add = supply_add*1.1;
+  } else if (self_nation.happiness >= 85) {
+    //5% more productive
+    supply_add = supply_add*1.05;
+  } else if (self_nation.happiness < 40) {
+    //15% less productive
+    supply_add = supply_add*0.85;
+  }
+  //note: rounding
+  self_nation.supply += Math.round(supply_add);
 }
 
 /**
@@ -4688,14 +4799,14 @@ function create_region_modal(desig, options) {
     region_modal.members.push(cc2);
     //construct buttons
     //"gold"
-    let buy_cc1 = new TextButton(canvas, [[550, 495], [[500, 470], [635, 505]]], "Buy", "22px Arial", "#dbbe1a", "#efe8ee", "white", true, "black", false, function(self){
+    function cc_buy(self, cc_num, cc_num_b) {
       //nothing should be bought if cc1 is empty... obviously
-      if (cc1.nothing) {
+      if (cc_num.nothing) {
         return;
       }
       //make sure construction of this is not already happening
       let items = self_nation.construction.filter(function(item) {
-        return item.desig === desig && item.type === cc1_b.name
+        return item.desig === desig && item.type === cc_num.name
       });
       if (items.length !== 0) {
         //construction is already happening
@@ -4703,7 +4814,7 @@ function create_region_modal(desig, options) {
         return;
       }
       items = region_obj.buildings.filter(function(item) {
-        return item.type === cc1_b.upgrade_of;
+        return item.type === cc_num.upgrade_of;
       });
       if (items.length !== 0) {
         if (items[0].currently_upgrading) {
@@ -4713,92 +4824,55 @@ function create_region_modal(desig, options) {
         }
       }
       //check supply and wealth
-      let cc1_cost = cc1.cost;
-      if (self_nation.wealth < cc1_cost.wealth) {
+      let cc_num_cost = cc_num.cost;
+      if (self_nation.wealth < cc_num_cost.wealth) {
         construct_fail(self);
         return;
-      } else if (self_nation.supply < cc1_cost.supply) {
+      } else if (self_nation.supply < cc_num_cost.supply) {
         construct_fail(self);
         return;
       }
       //subtract supply and wealth
-      self_nation.wealth = self_nation.wealth - cc1_cost.wealth;
-      self_nation.supply -= cc1_cost.supply;
+      self_nation.wealth = self_nation.wealth - cc_num_cost.wealth;
+      self_nation.supply -= cc_num_cost.supply;
+      let build_duration = cc_num_cost.duration;
+      //if happiness 95% or over, 15% faster construction, if happiness 85% or over, 10% faster construction, if 75% or over, 5% faster construction, if happiness under 40%, 10% slower
+      //if 40 to less than 75 percent, regular duration
+      if (self_nation.happiness >= 95) {
+        build_duration = Math.round(build_duration*0.85);
+      } else if (self_nation.happiness >= 85) {
+        build_duration = Math.round(build_duration*0.9);
+      } else if (self_nation.happiness >= 75) {
+        build_duration = Math.round(build_duration*0.95);
+      } else if (self_nation.happiness < 40) {
+        build_duration = Math.round(build_duration*1.1);
+      }
       //add to construction queue
       let add_to_queue = {
-        type: cc1_b.name,
+        type: cc_num_b.name,
         start: window.ticks,
-        dur: cc1_cost.duration,
+        dur: build_duration,
         desig: desig
       };
       //ternary operator
-      add_to_queue.upgrade_of = cc1_b.upgrade_of ? cc1_b.upgrade_of : false;
+      add_to_queue.upgrade_of = cc_num_b.upgrade_of ? cc_num_b.upgrade_of : false;
       self_nation.construction.push(add_to_queue);
       //modify current building to currently_upgrading = true
-      if (cc1_b.upgrade_of) {
+      if (cc_num_b.upgrade_of) {
         let upgrading_index = regions_info[desig].buildings.findIndex(function (item) {
-          return item.type === cc1_b.upgrade_of;
+          return item.type === cc_num_b.upgrade_of;
         });
         region_obj.buildings[upgrading_index].currently_upgrading = true;
       }
       construct_success(self);
+    }
+    let buy_cc1 = new TextButton(canvas, [[550, 495], [[500, 470], [635, 505]]], "Buy", "22px Arial", "#dbbe1a", "#efe8ee", "white", true, "black", false, function(self){
+      cc_buy(self, cc1, cc1_b);
     }, false);
     current_section.push(buy_cc1);
     region_modal.members.push(buy_cc1);
     let buy_cc2 = new TextButton(canvas, [[800, 495], [[750, 470], [885, 505]]], "Buy", "22px Arial", "#dbbe1a", "#efe8ee", "white", true, "black", false, function(self){
-      //nothing should be bought if cc2 is empty... obviously
-      if (cc2.nothing) {
-        return;
-      }
-      //make sure construction of this is not already happening
-      let items = self_nation.construction.filter(function(item) {
-        return item.desig === desig && item.type === cc2_b.name
-      });
-      if (items.length !== 0) {
-        //construction is already happening
-        construct_fail(self);
-        return;
-      }
-      items = region_obj.buildings.filter(function(item) {
-        return item.type === cc2_b.upgrade_of;
-      });
-      if (items.length !== 0) {
-        if (items[0].currently_upgrading) {
-          //construction is already happening
-          construct_fail(self);
-          return;
-        }
-      }
-      //check supply and wealth
-      let cc2_cost = cc2.cost;
-      if (self_nation.wealth < cc2_cost.wealth) {
-        construct_fail(self);
-        return;
-      } else if (self_nation.supply < cc2_cost.supply) {
-        construct_fail(self);
-        return;
-      }
-      //subtract supply and wealth
-      self_nation.wealth = self_nation.wealth - cc2_cost.wealth;
-      self_nation.supply -= cc2_cost.supply;
-      //add to construction queue
-      let add_to_queue = {
-        type: cc2_b.name,
-        start: window.ticks,
-        dur: cc2_cost.duration,
-        desig: desig
-      };
-      //ternary operator
-      add_to_queue.upgrade_of = cc2_b.upgrade_of ? cc2_b.upgrade_of : false;
-      self_nation.construction.push(add_to_queue);
-      //modify current building to currently_upgrading = true
-      if (cc2_b.upgrade_of) {
-        let upgrading_index = regions_info[desig].buildings.findIndex(function (item) {
-          return item.type === cc2_b.upgrade_of;
-        });
-        region_obj.buildings[upgrading_index].currently_upgrading = true;
-      }
-      construct_success(self);
+      cc_buy(self, cc2, cc2_b);
     }, false);
     current_section.push(buy_cc2);
     region_modal.members.push(buy_cc2);
@@ -5355,6 +5429,9 @@ function create_event_modal(event) {
       event_modal.close();
     }, false);
     if (choice.effect_text) {
+      setTimeout(function() {
+        choice_btn.text = choice.effect_text;
+      }, 2000);
       let choice_interval_id = setInterval(function() {
         if (!canvas.components.includes(choice_btn)) {
           clearInterval(choice_interval_id);
@@ -5365,7 +5442,7 @@ function create_event_modal(event) {
         } else {
           choice_btn.text = choice.text;
         }
-      }, 3000);
+      }, 3500);
     }
     let old_choice_mousemove = choice_btn.mousemove;
     choice_btn.mousemove = function(e) {
@@ -5530,10 +5607,6 @@ function game_scene() {
     } else if (window.gameScaleFactor > 2.5) {
       window.gameScaleFactor = 2.5;
     } else if (e.deltaY < 0) {
-      //window.gameTranslate[0] += Math.round(e.offsetX/2*0.025);
-      //window.gameTranslate[1] += Math.round(e.offsetY/2*0.025);
-      //window.gameTranslate[0] += 600*(window.gameScaleFactor+0.025)-600*(window.gameScaleFactor);
-      //window.gameTranslate[1] += 450*(window.gameScaleFactor+0.025)-450*(window.gameScaleFactor);
       window.gameTranslate[0] += e.offsetX*(window.gameScaleFactor+0.025)-e.offsetX*(window.gameScaleFactor);
       window.gameTranslate[1] += e.offsetY*(window.gameScaleFactor+0.025)-e.offsetY*(window.gameScaleFactor);
     } else if (e.deltaY > 0) {
@@ -5902,7 +5975,7 @@ function selection_part_1_scene() {
   selectmap.crop = true;
   */
   //see above commented, making it a normal image instead of movingbackground fixes a bug for safari
-  let selectmap = new BasicImage(canvas, [275, 93.75], [600, 600], "/images/transparent_selection_map.png", transparent_selection_map)
+  let select_map = new BasicImage(canvas, [275, 93.75], [600, 600], "/images/transparent_selection_map.png", transparent_selection_map)
   //select province
   //instructions
   new Text(canvas, [canvas.canvas.width/2-150, 100], "Select starting region", "24px Arial", "black", false, false, undefined);
@@ -5955,7 +6028,12 @@ function load_scene() {
   let loaded_count = 0;
   new ProgressBar(canvas, [[300, 300], 600, 55], function() {return loaded_count}, total_loads["game_load_start"], "red", "black");
   //quotes
-  let loading_quotes = [['Tip: Switch between different map views to do different things', ""], ['Tip: Click on things', ""], ['Tip: Unhoused (including units in foreign lands) or moving units will take more upkeep.', ""], ['"OW!"', "-Last Words of King Threpanyan 'The Insured'"]];
+  let loading_quotes = [
+    ['Tip: Switch between different map views to do different things', ""],
+    ['Tip: Click on things', ""],
+    ['Tip: Unhoused (including units in foreign lands) or moving units will take more upkeep.', ""],
+    ['"OW!"', "-Last Words of King Threpanyan 'The Insured'"]
+  ];
   let r = Math.floor(Math.random() * loading_quotes.length);
   new Paragraph(canvas, loading_quotes[r][0], "17px Arial", "black", [600, 375], 420, "loading-quote", true, loading_quotes[r][1]);
   let quote_change_interval_id = setInterval(function() {
